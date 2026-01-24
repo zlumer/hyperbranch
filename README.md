@@ -1,6 +1,6 @@
 # Hyperbranch
 
-Git-native Markdown-native AI agent orchestrator.
+No-overhead git-native markdown-native AI agent orchestrator.
 
 Let AI handle AI problems while you focus on your goals.
 
@@ -41,6 +41,14 @@ Hyperbranch embraces the existing abstractions, not substitutes them with a new 
 - AI agents alredy have research and codebase exploration **tools**, so we let them use them as they see fit.
 
 Using existing tools has an additional benefit of free improvements when upstream tools get new features.
+
+### No operational overhead
+
+Hyperbranch exists to solve problems, not create them. To reduce entropy, not increase it.
+
+This means:
+- Users should not be required to write and maintain manual config files (unless they prefer to change the default settings)
+- Users should be able to use their existing skills in coding, prompt writing, agent steering in any way they prefer
 
 ### Git-native
 
