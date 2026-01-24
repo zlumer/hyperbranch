@@ -3,8 +3,7 @@
   "version": "0.0.1",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
-  "scripts": {
-  },
+  "scripts": {},
   "keywords": [
     "ai",
     "ai-agent",
@@ -12,6 +11,10 @@
     "opencode",
     "aider"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zlumer/hyperbranch.git"
+  },
   "author": "zlumer",
   "license": "MIT"
 }
