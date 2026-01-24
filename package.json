@@ -1,0 +1,17 @@
+{
+  "name": "hyperbranch",
+  "version": "0.0.1",
+  "description": "No-overhead git-native markdown-native AI agent orchestrator",
+  "main": "index.js",
+  "scripts": {
+  },
+  "keywords": [
+    "ai",
+    "ai-agent",
+    "claude",
+    "opencode",
+    "aider"
+  ],
+  "author": "zlumer",
+  "license": "MIT"
+}
