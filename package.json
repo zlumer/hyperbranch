@@ -1,6 +1,6 @@
 {
   "name": "hyperbranch",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
   "scripts": {},
