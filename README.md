@@ -1,8 +1,8 @@
 # Hyperbranch
 
-No-overhead git-native markdown-native AI agent orchestrator.
+Stop babysitting AI and get back into flow.
 
-Let AI handle AI problems while you focus on your goals.
+No-overhead git-native markdown-native AI agent orchestrator.
 
 ## Why (problem)
 
