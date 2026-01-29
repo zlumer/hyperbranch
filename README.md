@@ -4,6 +4,12 @@ Stop babysitting AI and get back into flow.
 
 No-overhead git-native markdown-native AI agent orchestrator.
 
+## When to use Hyperbranch
+
+1. If you're a software developer and your job became the boring loop of "prompt AI -> wait 1-5 mins -> check the response -> prompt again", particularly if you have several terminals open at once.
+2. If you're a team and your developers have the best AI tools available, yet features and fixes still take days to implement (or worse, weeks).
+3. If you have vibecoded an app and want to continue developing it, but your vibecoding tool lately started breaking more things than it fixes.
+
 ## Why (problem)
 
 Modern development with AI agents is hard to manage:
