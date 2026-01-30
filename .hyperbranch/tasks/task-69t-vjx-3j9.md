@@ -23,14 +23,8 @@ Task ID is a combination of the current timestamp in ms + some randomness (~3 bi
 This level of randomness is definitely not enough to guarantee uniqueness of IDs, although it still reduces the duplicate chance to ~10% for two tasks created in the same millisecond, letting the calling code retry the duplicates. Throughput is theoretically limited to 10 000 tasks per second, but the system is not designed for such load anyway. The only reason why the randomness exists at all is just to spice things up a bit. If we get to a point where 10 000 parallel agents are the norm, we will have to change task IDs to a proper UUIDv7. The only realistic scenario where duplicates can happen is if task IDs are generated in a loop while migrating tasks from some other system.
 
 ```typescript
-// generate simple 8 chars
-(Date.now()*10 + Math.floor(Math.random() * 10)).toString(36).padStart(8, '0')
-
 // generate 9 chars dashed
 (Date.now()*10 + Math.floor(Math.random() * 10)).toString(36).padStart(9, '0').replace(/.{3}(?!$)/g, '$&-')
-
-// parse simple 8 chars
-new Date(parseInt('zzzzzzzzz', 36) / 10)
 
 // parse 9 chars dashed
 new Date(parseInt('01i-qre-70w'.replaceAll('-', ''), 36) / 10)
