@@ -12,7 +12,7 @@ export async function rmCommand(args: Args) {
   const force = args.force || args.f || false;
 
   if (!target) {
-    await listCandidates(args);
+    await listCandidates(args, force);
     return;
   }
 
@@ -98,7 +98,7 @@ async function sweep(force: boolean) {
   } catch {}
 }
 
-async function listCandidates(args: Args) {
+async function listCandidates(args: Args, force: boolean) {
   const target = args._[1] ? String(args._[1]) : undefined;
   const worktreesDir = WORKTREES_DIR();
   if (!(await exists(worktreesDir))) {
@@ -155,7 +155,6 @@ async function listCandidates(args: Args) {
 
   // Check for sweep flag
   if (args.sweep) {
-    const force = args.force || args.f || false;
     await sweep(force);
     return;
   }
@@ -165,6 +164,8 @@ async function listCandidates(args: Args) {
     console.log(c);
   }
   console.log("\nRun 'hb rm <task>/<run>' to remove specific runs.");
+  console.log("Run 'hb rm --sweep' to remove all clean inactive runs.");
+  console.log("Run 'hb rm --sweep --force' to remove all inactive runs (even if dirty).");
 }
 
 async function removeTask(taskId: string, force: boolean) {
