@@ -60,97 +60,59 @@ export async function runContainer(
   // Prepare log files
   const stdoutPath = join(logDir, "stdout.log");
   const stderrPath = join(logDir, "stderr.log");
-
-  const stdoutFile = await Deno.open(stdoutPath, {
-    write: true,
-    create: true,
-    truncate: true,
-  });
-  const stderrFile = await Deno.open(stderrPath, {
-    write: true,
-    create: true,
-    truncate: true,
-  });
-
   const cidFile = join(config.hostWorkdir, "hb.cid");
 
-  try {
-    // Construct Environment Variables for run.sh
-    const scriptEnv: Record<string, string> = {
-      ...config.env, // Pass user envs
-      HB_IMAGE: config.image,
-      HB_CMD: config.exec.map((c) => `"${c}"`).join(" "), // Naive quoting, simpler for now
-      HB_USER: config.user,
-      HB_ARGS: [
-        ...config.mounts,
-        ...config.dockerArgs,
-        // Env vars for container are added here
-        ...Object.keys(config.env).map((k) => `-e ${k}`),
-      ].join(" "),
-    };
+  // Construct Environment Variables for run.sh
+  const scriptEnv: Record<string, string> = {
+    ...config.env, // Pass user envs
+    HB_IMAGE: config.image,
+    HB_CMD: config.exec.map((c) => `"${c}"`).join(" "), // Naive quoting, simpler for now
+    HB_USER: config.user,
+    HB_ARGS: [
+      ...config.mounts,
+      ...config.dockerArgs,
+      // Env vars for container are added here
+      ...Object.keys(config.env).map((k) => `-e ${k}`),
+    ].join(" "),
+  };
 
-    // We are executing `bash run.sh` in the worktree
-    console.log(`Executing Docker script (run.sh)...`);
+  // We execute `bash run.sh` in detached mode using nohup
+  // This allows the Deno process to exit while the container keeps running
+  console.log(`Executing Docker script (run.sh) in background...`);
 
-    const cmd = new Deno.Command("bash", {
-      args: ["run.sh"],
-      cwd: config.hostWorkdir,
-      env: scriptEnv,
-      stdout: "piped",
-      stderr: "piped",
-    });
+  // Using sh -c to wrap the nohup command
+  // stdout.log and stderr.log are created in the worktree (cwd)
+  const cmd = new Deno.Command("sh", {
+    args: [
+      "-c",
+      `nohup ./run.sh > stdout.log 2> stderr.log < /dev/null &`,
+    ],
+    cwd: config.hostWorkdir,
+    env: scriptEnv,
+    stdout: "null",
+    stderr: "null",
+  });
 
-    const process = cmd.spawn();
+  const process = cmd.spawn();
+  await process.status; // Wait for the 'spawn' command (nohup) to finish, which is instant
 
-    // Wait briefly for CID file to be populated by the script
-    let cid = "";
-    for (let i = 0; i < 50; i++) { // Wait up to 5s
-      try {
-        cid = await Deno.readTextFile(cidFile);
-        if (cid.trim()) break;
-      } catch {
-        // wait
-      }
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    if (cid.trim()) {
-      onStart(cid.trim());
-    }
-
-    // Pipe streams
-    // We want: Process -> Console AND Process -> File
-    // We can't use .pipeTo() twice on the same ReadableStream. We need to tee() it.
-
-    const [stdoutConsole, stdoutLog] = process.stdout.tee();
-    const [stderrConsole, stderrLog] = process.stderr.tee();
-
-    // Pipe to console
-    const pipes = [
-      stdoutConsole.pipeTo(Deno.stdout.writable, { preventClose: true }),
-      stderrConsole.pipeTo(Deno.stderr.writable, { preventClose: true }),
-      stdoutLog.pipeTo(stdoutFile.writable),
-      stderrLog.pipeTo(stderrFile.writable),
-    ];
-
-    const status = await process.status;
-
-    // Ensure streams are fully consumed/written before closing files
-    await Promise.all(pipes);
-
-    if (!status.success) {
-      throw new Error(`Container exited with code ${status.code}`);
-    }
-  } finally {
-    // Cleanup resources
+  // Wait for CID file to be populated by the script
+  let cid = "";
+  console.log("Waiting for container to start...");
+  
+  for (let i = 0; i < 100; i++) { // Wait up to 10s
     try {
-      stdoutFile.close();
-      stderrFile.close();
-    } catch { /* ignore */ }
+      cid = await Deno.readTextFile(cidFile);
+      if (cid.trim()) break;
+    } catch {
+      // wait
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
 
-    // Cid file is in worktree, can remain or be deleted.
-    // Spec says "run.sh" handles --rm, but cidfile persists on host.
-    try {
-      await Deno.remove(cidFile);
-    } catch { /* ignore */ }
+  if (cid.trim()) {
+    onStart(cid.trim());
+  } else {
+    throw new Error("Timed out waiting for container to start. Check worktree logs.");
   }
 }

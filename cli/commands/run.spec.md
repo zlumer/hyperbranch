@@ -4,25 +4,47 @@
 
 The `run` command executes a Hyperbranch task within an isolated, reproducible environment. It orchestrates Git worktrees to preserve the user's exact state (including untracked and ignored files), manages the execution environment (Docker), and handles logging and cleanup.
 
+**Key Change:** As of the latest version, `hb run` executes in **Detached Mode**. The CLI command initiates the container and exits immediately, leaving the task running in the background. This enables parallel execution of multiple tasks.
+
 ## Goals
 
 1.  **Isolation**: Runs do not interfere with the user's current working directory.
 2.  **State Preservation**: The agent sees the code *exactly* as the user sees it, including new files and secrets (if configured).
 3.  **Safety**: The command aborts immediately on conflicts to prevent running on a broken state.
-4.  **Observability**: Full separation of `stdout` and `stderr` logs, persisted within the worktree.
-5.  **Performance**: Intelligent caching for package managers (npm, yarn, pnpm).
+4.  **Parallelism**: Support running multiple tasks simultaneously without console interleaving.
+5.  **Observability**: Logs are persisted to files and viewed via `hb logs`.
+6.  **Control**: Tasks can be listed (`hb ps`) and terminated (`hb stop`).
 
 ## Architecture
 
 The implementation uses a modular structure:
 
-*   **`cli/commands/run.ts`**: The orchestrator.
-*   **`cli/utils/config.ts`**: Configuration loading (TOML).
-*   **`cli/utils/git.ts`**: Git operations (Status, Stash, Worktree, Branching).
-*   **`cli/utils/system.ts`**: System info (User, Caches, Signal handling).
-*   **`cli/utils/docker.ts`**: Docker execution and management.
+*   **`cli/commands/run.ts`**: The orchestrator (Fire-and-forget).
+*   **`cli/commands/logs.ts`**: Log viewer (`tail -f`).
+*   **`cli/commands/stop.ts`**: Task terminator.
+*   **`cli/commands/ps.ts`**: Status monitor.
+*   **`cli/utils/docker.ts`**: Docker execution (supports detached `nohup` execution).
 
-## Detailed Flow
+## Commands
+
+### `hb run <task-id>`
+*   Prepares worktree and assets.
+*   Launches Docker container in background.
+*   Prints Task ID and Container ID (CID) then exits.
+
+### `hb logs <task-id> <run-index>`
+*   Finds the worktree for the specified task and run index.
+*   Streams `stdout.log` using `tail -f`.
+
+### `hb stop <task-id>`
+*   Finds the running container for the task.
+*   Executes `docker stop`.
+
+### `hb ps`
+*   Lists all active worktrees/tasks.
+*   Shows status (Running/Stopped), CID, and Age.
+
+## Detailed Flow (`hb run`)
 
 ### 1. Configuration (`cli/utils/config.ts`)
 
@@ -93,15 +115,12 @@ Ensure the worktree matches the host state fully.
 
 ### 6. Execution & Logging (`cli/utils/docker.ts`)
 
-1.  **Log Setup**:
-    *   Create `stdout.log` and `stderr.log` in the worktree directory.
-2.  **Signal Handling**:
-    *   Trap `SIGINT` (Ctrl+C).
-    *   On signal: Stop the specific Docker container, then exit.
-3.  **Run Container**:
-    *   Stream output to Console (Live).
-    *   Pipe `stdout` -> `stdout.log`.
-    *   Pipe `stderr` -> `stderr.log`.
+1.  **Detached Execution**:
+    *   Executes `run.sh` in the background using `nohup`.
+    *   Deno process waits *only* for confirmation of container start (CID file), then exits.
+2.  **Log Setup**:
+    *   Shell redirection pipes `stdout` -> `stdout.log` and `stderr` -> `stderr.log` within the worktree.
+    *   No logs are streamed to the CLI console (use `hb logs`).
 
 ### 7. Cleanup
 
@@ -110,52 +129,27 @@ Ensure the worktree matches the host state fully.
 
 ## Error Handling & Logging Strategy
 
-*   **Early Failures**: If the worktree cannot be created (e.g., git error), logs are output **only to the console**.
-*   **Runtime Failures**: Once the worktree exists, all logs are captured in `stdout.log` and `stderr.log`.
-*   **Exception Handling**: Utility functions **throw Errors** rather than exiting the process. The main command handler catches these errors, ensures cleanup (stopping containers), and logs the failure.
-
-## Testing Strategy
-
-*   **Unit Tests**: Core logic (Git, Docker command generation, Config parsing) is tested using **Unit Tests**.
-*   **Mocking**: `Deno.Command` is mocked to verify command construction and execution flows without spawning actual processes or requiring a Docker daemon during tests.
-*   **Libraries**: Use `@std/testing` and `@std/assert`.
+*   **Startup Failures**: Errors during preparation (Git, Config) are printed to Console.
+*   **Runtime Failures**: Once detached, all output goes to `stdout.log` and `stderr.log` in the worktree.
+*   **Debug**: Use `hb logs` to investigate runtime issues.
 
 ## Modules
 
-### `cli/utils/config.ts`
-
-```typescript
-export interface CopyConfig {
-    include: string[];
-    exclude: string[];
-    includeDirs: string[];
-    excludeDirs: string[];
-}
-export interface RunConfig {
-    copy: CopyConfig;
-    env_vars: string[];
-}
-export function loadConfig(): Promise<RunConfig>;
-```
-
 ### `cli/utils/git.ts`
+Updated to support run discovery.
 
 ```typescript
-export function isGitDirty(): Promise<boolean>;
-export function createStash(): Promise<string | null>; // Returns hash
-export function resolveBaseBranch(taskId: string): Promise<string>;
-export function getNextRunBranch(taskId: string): Promise<string>;
-export function createWorktree(branch: string, base: string, path: string): Promise<void>;
-export function applyStash(path: string, hash: string): Promise<void>; // Throws on conflict
-export function copyUntrackedFiles(dest: string): Promise<void>;
-export function copyIgnoredFiles(dest: string, config: CopyConfig): Promise<void>;
+export function getLatestRunBranch(taskId: string): Promise<string | null>;
 ```
 
-### `cli/utils/system.ts`
+### `cli/utils/docker.ts`
+Updated to support detached execution.
 
 ```typescript
-export function getPackageCacheMounts(): Promise<string[]>; // Returns Docker mount args
-export function getAgentConfigMount(): Promise<string>;
-export function getEnvVars(keys: string[]): Record<string, string>;
-export function setupSignalHandler(containerId: string): void;
+export function runContainer(
+  config: DockerConfig, 
+  logDir: string, 
+  onStart: (id: string) => void
+): Promise<void>; 
+// Returns after container ID is detected, does not wait for exit.
 ```

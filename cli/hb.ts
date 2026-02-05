@@ -6,6 +6,9 @@ import { createCommand } from "./commands/create.ts"
 import { connectCommand } from "./commands/connect.ts"
 import { moveCommand } from "./commands/move.ts"
 import { runCommand } from "./commands/run.ts"
+import { logsCommand } from "./commands/logs.ts"
+import { stopCommand } from "./commands/stop.ts"
+import { psCommand } from "./commands/ps.ts"
 
 // --- File I/O ---
 
@@ -41,6 +44,15 @@ async function main()
 		case "run":
 			await runCommand(args)
 			break
+		case "logs":
+			await logsCommand(args)
+			break
+		case "stop":
+			await stopCommand(args)
+			break
+		case "ps":
+			await psCommand()
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
@@ -48,6 +60,9 @@ async function main()
 			console.log("  connect [--depends-on <id>] [--child-of <id>] <task-id>")
 			console.log("  move [--from-status <old>] <task-id> <new-status>")
 			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
+			console.log("  logs <task-id> <run-index>")
+			console.log("  stop <task-id>")
+			console.log("  ps")
 			break
 	}
 }
@@ -56,4 +71,3 @@ if (import.meta.main)
 {
 	main()
 }
-

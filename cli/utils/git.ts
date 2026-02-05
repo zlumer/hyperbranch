@@ -84,6 +84,30 @@ export async function getNextRunBranch(taskId: string): Promise<string> {
   }
 }
 
+export async function getLatestRunBranch(taskId: string): Promise<string | null> {
+  const prefix = getRunBranchPrefix(taskId);
+  try {
+    const output = await git(["branch", "--list", `${prefix}*`]);
+    const branches = output.split("\n").map((b) => b.trim().replace("* ", "")).filter(Boolean);
+    
+    if (branches.length === 0) return null;
+
+    let maxIdx = -1;
+    let latestBranch = "";
+
+    for (const branch of branches) {
+      const idx = parseRunNumber(branch);
+      if (idx !== null && idx > maxIdx) {
+        maxIdx = idx;
+        latestBranch = branch;
+      }
+    }
+    return latestBranch || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createWorktree(
   branch: string,
   base: string,

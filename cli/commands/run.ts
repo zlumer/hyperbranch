@@ -62,34 +62,18 @@ export async function runCommand(args: Args) {
     console.log("Synchronizing untracked files...");
     await Git.copyUntrackedFiles(worktreePath);
 
-		if (config.copy.include.length > 0 || config.copy.includeDirs.length > 0) {
-			console.log(`Copying ignored files...`);
-			await Git.copyIgnoredFiles(worktreePath, config.copy);
-		}
-
-		// 4. Script Generation
-		console.log("Generating execution assets...");
-		await Docker.prepareWorktreeAssets(worktreePath, args["dockerfile"] as string);
-
-		// Sync the Task File itself if it's not in the branch (it should be if committed, but might be dirty/untracked on host)
-    // actually, the task file is likely tracked. if modified, stash covered it. if new, untracked covered it.
-    // But let's ensure the specific task file is up to date just in case.
-    const taskFilePath = getTaskPath(taskId);
-    if (await Deno.stat(taskFilePath).then(() => true).catch(() => false)) {
-      // Copy task file explicitly to ensure latest version
-      const destTaskPath = join(
-        worktreePath,
-        ".hyperbranch/tasks",
-        `task-${taskId}.md`,
-      );
-      await ensureDir(join(worktreePath, ".hyperbranch/tasks"));
-      await copy(taskFilePath, destTaskPath, { overwrite: true });
+    if (config.copy.include.length > 0 || config.copy.includeDirs.length > 0) {
+      console.log(`Copying ignored files...`);
+      await Git.copyIgnoredFiles(worktreePath, config.copy);
     }
+
+    // 4. Script Generation
+    console.log("Generating execution assets...");
+    await Docker.prepareWorktreeAssets(worktreePath, args["dockerfile"] as string);
+
   } catch (e) {
     console.error("\n❌ Setup Failed:");
     console.error(e instanceof Error ? e.message : String(e));
-    // If worktree was created, we leave it? Spec says "Worktree remains for inspection".
-    // But if it failed partially, maybe we should suggest cleanup.
     if (worktreePath) {
       console.log(`\nPartial worktree may exist at: ${worktreePath}`);
     }
@@ -168,10 +152,12 @@ export async function runCommand(args: Args) {
 
   try {
     await Docker.runContainer(dockerConfig, worktreePath, (cid) => {
-      System.setupSignalHandler(cid);
+      // Detached mode: Container ID is received when confirmed running
+      console.log(`Container started with ID: ${cid}`);
     });
-    console.log(`\n✅ Run complete.`);
+    console.log(`\n✅ Task started successfully.`);
     console.log(`Logs available in: ${worktreePath}`);
+    console.log(`Use 'hb logs ${taskId}' to view output.`);
   } catch (e) {
     console.error(`\n❌ Execution Failed:`);
     console.error(e instanceof Error ? e.message : String(e));
