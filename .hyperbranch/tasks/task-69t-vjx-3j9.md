@@ -19,7 +19,7 @@ We don't have worktrees and containers just yet, so focus on local development u
 
 ### Task ID
 
-Task ID is a combination of the current timestamp in ms + some randomness (~3 bits of randomness by prepending a 0-9 random suffix).
+Task ID is a combination of the current timestamp in ms + some randomness (~3 bits of randomness by appending a 0-9 random suffix).
 This level of randomness is definitely not enough to guarantee uniqueness of IDs, although it still reduces the duplicate chance to ~10% for two tasks created in the same millisecond, letting the calling code retry the duplicates. Throughput is theoretically limited to 10 000 tasks per second, but the system is not designed for such load anyway. The only reason why the randomness exists at all is just to spice things up a bit. If we get to a point where 10 000 parallel agents are the norm, we will have to change task IDs to a proper UUIDv7. The only realistic scenario where duplicates can happen is if task IDs are generated in a loop while migrating tasks from some other system.
 
 ```typescript
