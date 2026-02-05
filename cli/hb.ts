@@ -5,6 +5,7 @@ import { TASKS_DIR } from "./utils/tasks.ts"
 import { createCommand } from "./commands/create.ts"
 import { connectCommand } from "./commands/connect.ts"
 import { moveCommand } from "./commands/move.ts"
+import { runCommand } from "./commands/run.ts"
 
 // --- File I/O ---
 
@@ -37,12 +38,16 @@ async function main()
 		case "move":
 			await moveCommand(args)
 			break
+		case "run":
+			await runCommand(args)
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
 			console.log("  create [--parent <id>] [--edit] <title>")
 			console.log("  connect [--depends-on <id>] [--child-of <id>] <task-id>")
 			console.log("  move [--from-status <old>] <task-id> <new-status>")
+			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
 			break
 	}
 }
