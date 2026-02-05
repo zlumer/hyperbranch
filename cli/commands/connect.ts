@@ -33,7 +33,12 @@ export async function connectCommand(args: ReturnType<typeof parseArgs>)
 		}
 
 		// Check cycle
-		await detectDependencyCycle(taskId, dependsOn)
+		try {
+			await detectDependencyCycle(taskId, dependsOn)
+		} catch (e) {
+			console.error(e instanceof Error ? e.message : String(e))
+			Deno.exit(1)
+		}
 
 		if (!task.frontmatter.dependencies.includes(dependsOn))
 		{
@@ -56,7 +61,12 @@ export async function connectCommand(args: ReturnType<typeof parseArgs>)
 		}
 
 		// Check cycle
-		await detectParentCycle(taskId, childOf)
+		try {
+			await detectParentCycle(taskId, childOf)
+		} catch (e) {
+			console.error(e instanceof Error ? e.message : String(e))
+			Deno.exit(1)
+		}
 
 		if (task.frontmatter.parent !== childOf)
 		{
