@@ -3,6 +3,7 @@ import { expandGlob } from "@std/fs/expand-glob";
 import { isAbsolute, join } from "@std/path";
 import { loadTask } from "./loadTask.ts";
 import { getRunBranchName, getRunBranchPrefix, getTaskBranchName, parseRunNumber } from "./branch-naming.ts";
+import { GIT_WORKTREES_PATH, GIT_LEGACY_WORKTREES_PATH } from "./paths.ts";
 
 // Helper to run git command
 async function git(args: string[], cwd?: string): Promise<string> {
@@ -138,6 +139,10 @@ export async function copyUntrackedFiles(dest: string): Promise<void> {
   const cwd = Deno.cwd();
 
   for (const file of files) {
+    if (file.startsWith(GIT_WORKTREES_PATH) || file.startsWith(GIT_LEGACY_WORKTREES_PATH)) {
+      continue;
+    }
+
     const srcPath = join(cwd, file);
     const destPath = join(dest, file);
     await copy(srcPath, destPath, {

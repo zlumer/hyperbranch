@@ -3,6 +3,7 @@ import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
+import { WORKTREES_DIR } from "../utils/paths.ts";
 
 import { getRunBranchName } from "../utils/branch-naming.ts";
 
@@ -26,8 +27,7 @@ export async function logsCommand(args: Args) {
   // Check if the worktree exists for this specific run
   const safeBranchName = runBranch.replace(/\//g, "-");
   const worktreePath = resolve(
-    Deno.cwd(),
-    ".hyperbranch/worktrees",
+    WORKTREES_DIR(),
     safeBranchName,
   );
   

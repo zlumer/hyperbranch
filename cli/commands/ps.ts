@@ -1,6 +1,7 @@
 
 import { join, basename } from "@std/path";
 import { exists } from "@std/fs/exists";
+import { WORKTREES_DIR } from "../utils/paths.ts";
 
 interface TaskStatus {
   taskId: string;
@@ -43,7 +44,7 @@ function calculateAge(startedAt: string): string {
 }
 
 export async function psCommand() {
-  const worktreesDir = join(Deno.cwd(), ".hyperbranch/worktrees");
+  const worktreesDir = WORKTREES_DIR();
   
   if (!(await exists(worktreesDir))) {
     console.log("No active runs found.");

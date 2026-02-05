@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env
 import { parseArgs } from "@std/cli/parse-args"
 import { ensureDir } from "@std/fs"
-import { TASKS_DIR } from "./utils/tasks.ts"
+import { TASKS_DIR } from "./utils/paths.ts"
 import { createCommand } from "./commands/create.ts"
 import { connectCommand } from "./commands/connect.ts"
 import { moveCommand } from "./commands/move.ts"
@@ -14,7 +14,7 @@ import { psCommand } from "./commands/ps.ts"
 
 async function ensureRepo()
 {
-	await ensureDir(TASKS_DIR)
+	await ensureDir(TASKS_DIR())
 }
 
 // --- Main ---

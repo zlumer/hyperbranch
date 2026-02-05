@@ -7,6 +7,7 @@ import * as Git from "../utils/git.ts";
 import * as System from "../utils/system.ts";
 import * as Docker from "../utils/docker.ts";
 import { getTaskPath } from "../utils/tasks.ts";
+import { WORKTREES_DIR } from "../utils/paths.ts";
 
 export async function runCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -43,8 +44,7 @@ export async function runCommand(args: Args) {
     // Spec says: .hyperbranch/worktrees/<branch-name>
     const safeBranchName = runBranch.replace(/\//g, "-");
     worktreePath = resolve(
-      Deno.cwd(),
-      ".hyperbranch/worktrees",
+      WORKTREES_DIR(),
       safeBranchName,
     );
 

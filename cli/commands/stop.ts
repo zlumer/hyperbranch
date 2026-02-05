@@ -3,6 +3,7 @@ import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
+import { WORKTREES_DIR } from "../utils/paths.ts";
 
 export async function stopCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -21,8 +22,7 @@ export async function stopCommand(args: Args) {
 
   const safeBranchName = runBranch.replace(/\//g, "-");
   const worktreePath = resolve(
-    Deno.cwd(),
-    ".hyperbranch/worktrees",
+    WORKTREES_DIR(),
     safeBranchName,
   );
 

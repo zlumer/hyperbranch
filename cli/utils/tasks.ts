@@ -1,7 +1,8 @@
 import { join } from "@std/path"
+import { TASKS_DIR } from "./paths.ts"
 
 // --- Configuration ---
-export const TASKS_DIR = join(Deno.cwd(), ".hyperbranch/tasks")
+export { TASKS_DIR }
 
 // --- ID Generation ---
 export function generateTaskId(): string
@@ -17,5 +18,5 @@ export function generateTaskId(): string
 }
 export function getTaskPath(id: string): string
 {
-	return join(TASKS_DIR, `task-${id}.md`)
+	return join(TASKS_DIR(), `task-${id}.md`)
 }
