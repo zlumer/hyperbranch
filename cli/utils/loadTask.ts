@@ -20,14 +20,7 @@ export async function loadTask(id: string): Promise<TaskFile>
 
 	if (!match)
 	{
-		// Fallback if file is malformed (missing frontmatter), return basic structure
-		console.warn(`Warning: Malformed task file ${path}, parsing best effort.`)
-		return {
-			id,
-			path,
-			frontmatter: { id, status: "todo", parent: null, dependencies: [] },
-			body: content
-		}
+		throw new Error(`Task ${id} is malformed: missing frontmatter at ${path}`)
 	}
 
 	const rawYaml = match[1]

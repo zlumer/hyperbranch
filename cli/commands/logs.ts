@@ -9,12 +9,30 @@ import { getRunBranchName } from "../utils/branch-naming.ts";
 
 export async function logsCommand(args: Args) {
   const taskId = args._[1] as string;
-  const runArg = args._[2];
+  let runArg = args._[2];
 
-  if (!taskId || !runArg) {
-    console.error("Error: Task ID and Run Index are required.");
-    console.error("Usage: hb logs <task-id> <run-index>");
+  if (!taskId) {
+    console.error("Error: Task ID is required.");
+    console.error("Usage: hb logs <task-id> [run-index]");
     Deno.exit(1);
+  }
+
+  // Default to latest run if not provided
+  if (!runArg) {
+      const latestBranch = await Git.getLatestRunBranch(taskId);
+      if (latestBranch) {
+          // branch: task/<id>/<idx>
+          const idxStr = latestBranch.split("/").pop();
+          if (idxStr) {
+             runArg = idxStr;
+             console.log(`Resolved latest run: ${runArg}`);
+          }
+      }
+  }
+
+  if (!runArg) {
+      console.error("Error: Could not determine run index.");
+      Deno.exit(1);
   }
 
   const runIndex = parseInt(String(runArg), 10);

@@ -4,6 +4,7 @@ import { copy } from "@std/fs/copy";
 
 export interface DockerConfig {
   image: string;
+  name?: string;
   dockerfile?: string;
   exec: string[];
   workdir: string; // The path INSIDE the container (mapped to worktree)
@@ -66,6 +67,7 @@ export async function runContainer(
   const scriptEnv: Record<string, string> = {
     ...config.env, // Pass user envs
     HB_IMAGE: config.image,
+    HB_NAME: config.name || "",
     HB_CMD: config.exec.map((c) => `"${c}"`).join(" "), // Naive quoting, simpler for now
     HB_USER: config.user,
     HB_ARGS: [
@@ -115,4 +117,46 @@ export async function runContainer(
   } else {
     throw new Error("Timed out waiting for container to start. Check worktree logs.");
   }
+}
+
+export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
+  try {
+    const cmd = new Deno.Command("docker", {
+      args: ["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}", cid],
+      stdout: "piped",
+      stderr: "null",
+    });
+    const output = await cmd.output();
+    if (!output.success) return { status: "unknown", startedAt: "" };
+    
+    const text = new TextDecoder().decode(output.stdout).trim();
+    const [status, startedAt] = text.split("|");
+    return { status, startedAt };
+  } catch {
+    return { status: "unknown", startedAt: "" };
+  }
+}
+
+export async function removeContainer(cid: string, force = false): Promise<void> {
+  const args = ["rm", cid];
+  if (force) args.splice(1, 0, "-f");
+  
+  const cmd = new Deno.Command("docker", {
+    args,
+    stdout: "null",
+    stderr: "null",
+  });
+  await cmd.output();
+}
+
+export async function removeImage(tag: string, force = false): Promise<void> {
+  const args = ["rmi", tag];
+  if (force) args.splice(1, 0, "-f");
+
+  const cmd = new Deno.Command("docker", {
+    args,
+    stdout: "null",
+    stderr: "null",
+  });
+  await cmd.output();
 }

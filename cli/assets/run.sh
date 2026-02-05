@@ -21,10 +21,17 @@ fi
 
 # Using 'exec' to replace the shell process with Docker, 
 # ensuring signals go directly to Docker (though --init handles init process duties)
+
+DOCKER_NAME_FLAG=""
+if [ -n "$HB_NAME" ]; then
+    DOCKER_NAME_FLAG="--name $HB_NAME"
+fi
+
 exec docker run \
   --rm \
   --init \
   $DOCKER_FLAGS \
+  $DOCKER_NAME_FLAG \
   --cidfile "hb.cid" \
   -w "/app" \
   -u "$HB_USER" \

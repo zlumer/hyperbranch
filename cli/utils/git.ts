@@ -6,7 +6,7 @@ import { getRunBranchName, getRunBranchPrefix, getTaskBranchName, parseRunNumber
 import { GIT_WORKTREES_PATH, GIT_LEGACY_WORKTREES_PATH } from "./paths.ts";
 
 // Helper to run git command
-async function git(args: string[], cwd?: string): Promise<string> {
+export async function git(args: string[], cwd?: string): Promise<string> {
   const command = new Deno.Command("git", {
     args,
     cwd: cwd || Deno.cwd(),
@@ -97,6 +97,22 @@ export async function createWorktree(
 ): Promise<void> {
   // git worktree add -b <branch> <path> <base>
   await git(["worktree", "add", "-b", branch, path, base]);
+}
+
+export async function removeWorktree(path: string, force = false): Promise<void> {
+  const args = ["worktree", "remove", path];
+  if (force) args.push("--force");
+  await git(args);
+}
+
+export async function deleteBranch(branch: string, force = false): Promise<void> {
+  const args = ["branch", force ? "-D" : "-d", branch];
+  await git(args);
+}
+
+export async function getUnmergedCommits(branch: string, base: string): Promise<string> {
+  // Returns commits in branch that are not in base
+  return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
 }
 
 export async function copyUntrackedFiles(dest: string): Promise<void> {

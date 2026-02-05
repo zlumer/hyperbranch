@@ -124,6 +124,7 @@ export async function runCommand(args: Args) {
 
   const dockerConfig: Docker.DockerConfig = {
     image: finalImage,
+    name: `hb-${taskId}-${safeBranchName.split("-").pop()}`, // hb-<task>-<runIdx>
     dockerfile,
     exec: execCmd,
     workdir: "/app",

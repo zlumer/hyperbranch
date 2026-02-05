@@ -9,6 +9,7 @@ import { runCommand } from "./commands/run.ts"
 import { logsCommand } from "./commands/logs.ts"
 import { stopCommand } from "./commands/stop.ts"
 import { psCommand } from "./commands/ps.ts"
+import { rmCommand } from "./commands/rm.ts"
 
 // --- File I/O ---
 
@@ -53,6 +54,9 @@ async function main()
 		case "ps":
 			await psCommand()
 			break
+		case "rm":
+			await rmCommand(args)
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
@@ -62,6 +66,7 @@ async function main()
 			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
 			console.log("  logs <task-id> <run-index>")
 			console.log("  stop <task-id>")
+			console.log("  rm <task-id>/<run-id> | <task-id>")
 			console.log("  ps")
 			break
 	}

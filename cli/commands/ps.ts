@@ -2,6 +2,7 @@
 import { join, basename } from "@std/path";
 import { exists } from "@std/fs/exists";
 import { WORKTREES_DIR } from "../utils/paths.ts";
+import * as Docker from "../utils/docker.ts";
 
 interface TaskStatus {
   taskId: string;
@@ -9,24 +10,6 @@ interface TaskStatus {
   cid: string;
   status: string;
   age: string;
-}
-
-async function getDockerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
-  try {
-    const cmd = new Deno.Command("docker", {
-      args: ["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}", cid],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const output = await cmd.output();
-    if (!output.success) return { status: "unknown", startedAt: "" };
-    
-    const text = new TextDecoder().decode(output.stdout).trim();
-    const [status, startedAt] = text.split("|");
-    return { status, startedAt };
-  } catch {
-    return { status: "unknown", startedAt: "" };
-  }
 }
 
 function calculateAge(startedAt: string): string {
@@ -61,7 +44,7 @@ export async function psCommand() {
       if (await exists(cidFile)) {
         const cid = (await Deno.readTextFile(cidFile)).trim();
         if (cid) {
-          const { status, startedAt } = await getDockerStatus(cid);
+          const { status, startedAt } = await Docker.getContainerStatus(cid);
           
           // Infer task ID from branch name (folder name)
           // Folder name: task-<id>-run-<n> (roughly, flattened)

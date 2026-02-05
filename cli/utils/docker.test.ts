@@ -18,7 +18,8 @@ function mockShellRun(
     (cmd: any, options?: any) => {
       const args = options?.args || [];
 
-      if (cmd === "bash" && args[0] === "run.sh") {
+      // Update to match: sh -c "nohup ./run.sh ... &"
+      if (cmd === "sh" && args[0] === "-c" && args[1].includes("./run.sh")) {
         // Verify environment variables
         if (options?.env) {
           for (const [k, v] of Object.entries(envChecks)) {
@@ -30,39 +31,23 @@ function mockShellRun(
           }
         }
 
-        // Simulate writing the CID file (run.sh does this via --cidfile)
-        // But we need to know WHERE to write it. The actual run.sh uses `hb.cid` in CWD.
-        // The runContainer logic waits for "hb.cid" in hostWorkdir.
+        // Simulate side effects (CID + logs)
         if (options?.cwd) {
-          Deno.writeTextFileSync(
-            join(options.cwd, "hb.cid"),
-            "mock-cid-script",
-          );
+          Deno.writeTextFileSync(join(options.cwd, "hb.cid"), "mock-cid-script");
+          Deno.writeTextFileSync(join(options.cwd, "stdout.log"), output.stdout);
+          Deno.writeTextFileSync(join(options.cwd, "stderr.log"), output.stderr);
         }
 
-        // Create streams
-        const stdoutStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(output.stdout));
-            controller.close();
-          },
-        });
-        const stderrStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(new TextEncoder().encode(output.stderr));
-            controller.close();
-          },
-        });
-
+        // Return a mock process that exits immediately (simulating the 'nohup &')
         return {
           spawn: () => ({
-            stdout: stdoutStream,
-            stderr: stderrStream,
-            status: Promise.resolve({
-              success: output.code === 0,
-              code: output.code,
-            }),
-            output: () => Promise.resolve({ success: true }),
+            stdout: null, // Output redirected to files
+            stderr: null,
+            status: Promise.resolve({ success: true, code: 0 }),
+            output: () => Promise.resolve({ success: true, code: 0 }),
+            kill: () => {},
+            ref: () => {},
+            unref: () => {},
           }),
         } as unknown as Deno.Command;
       }
