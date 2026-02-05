@@ -9,8 +9,8 @@ The `run` command executes a Hyperbranch task within an isolated, reproducible e
 ## Goals
 
 1.  **Isolation**: Runs do not interfere with the user's current working directory.
-2.  **State Preservation**: The agent sees the code *exactly* as the user sees it, including new files and secrets (if configured).
-3.  **Safety**: The command aborts immediately on conflicts to prevent running on a broken state.
+2.  **State Preservation**: The agent runs against a fresh worktree based on the committed state of the base branch. Untracked files and ignored files (if configured) are synchronized, but uncommitted modifications to tracked files are **ignored** to avoid conflicts.
+3.  **Safety**: The command aborts if worktree creation fails.
 4.  **Parallelism**: Support running multiple tasks simultaneously without console interleaving.
 5.  **Observability**: Logs are persisted to files and viewed via `hb logs`.
 6.  **Control**: Tasks can be listed (`hb ps`) and terminated (`hb stop`).
@@ -71,21 +71,16 @@ Load configuration to determine ignored files to copy and env vars to forward.
 
 ### 3. Git Worktree Preparation (`cli/utils/git.ts`)
 
-1.  **Check Status**: Check for uncommitted changes.
-2.  **Stash (Tracked)**: `git stash create` to capture modified tracked files (safe, no working dir change). Store hash.
-3.  **Resolve Base Branch**:
+1.  **Resolve Base Branch**:
     *   Get Task Parent ID.
     *   Exists? -> `task/<parent-id>`.
     *   Null? -> Default branch (`main` or `master`).
-4.  **Resolve Run Branch**:
+2.  **Resolve Run Branch**:
     *   Pattern: `task/<id>/<run-idx>`.
     *   Scan existing branches to find the next sequential index (e.g., `.../run-1`, `.../run-2`).
-5.  **Create Worktree**:
+3.  **Create Worktree**:
     *   Command: `git worktree add -b <run-branch> <worktree-path> <base-branch>`.
     *   Path: `.hyperbranch/worktrees/<run-branch>`.
-6.  **Apply Stash**:
-    *   Run `git stash apply <hash>` inside worktree.
-    *   **CRITICAL**: If conflict -> **ABORT**.
 
 ### 4. File Synchronization
 

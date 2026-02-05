@@ -21,25 +21,6 @@ async function git(args: string[], cwd?: string): Promise<string> {
   return new TextDecoder().decode(output.stdout).trim();
 }
 
-export async function isGitDirty(): Promise<boolean> {
-  try {
-    // diff-index --quiet HEAD -- returns exit code 1 if dirty
-    await git(["diff-index", "--quiet", "HEAD", "--"]);
-    return false;
-  } catch {
-    return true;
-  }
-}
-
-export async function createStash(): Promise<string | null> {
-  if (!(await isGitDirty())) {
-    return null;
-  }
-  // Create a commit object without modifying index/workdir
-  const hash = await git(["stash", "create"]);
-  return hash || null;
-}
-
 export async function resolveBaseBranch(taskId: string): Promise<string> {
   try {
     const task = await loadTask(taskId);
@@ -116,18 +97,6 @@ export async function createWorktree(
 ): Promise<void> {
   // git worktree add -b <branch> <path> <base>
   await git(["worktree", "add", "-b", branch, path, base]);
-}
-
-export async function applyStash(path: string, hash: string): Promise<void> {
-  try {
-    // Apply inside the worktree
-    await git(["stash", "apply", hash], path);
-  } catch (e) {
-    // Throw a specific error for conflict
-    throw new Error(
-      `Conflict detected while applying stash ${hash} to worktree. Aborting run.\nOriginal Error: ${e}`,
-    );
-  }
 }
 
 export async function copyUntrackedFiles(dest: string): Promise<void> {

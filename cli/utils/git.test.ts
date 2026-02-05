@@ -53,53 +53,6 @@ function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, suc
 	});
 }
 
-Deno.test("isGitDirty - returns true when dirty", async () => {
-	const commandStub = mockGit({
-		"diff-index --quiet HEAD --": { success: false } // Exit code 1 means dirty
-	});
-	try {
-		assertEquals(await Git.isGitDirty(), true);
-	} finally {
-		commandStub.restore();
-	}
-});
-
-Deno.test("isGitDirty - returns false when clean", async () => {
-	const commandStub = mockGit({
-		"diff-index --quiet HEAD --": { success: true }
-	});
-	try {
-		assertEquals(await Git.isGitDirty(), false);
-	} finally {
-		commandStub.restore();
-	}
-});
-
-Deno.test("createStash - creates stash if dirty", async () => {
-	const commandStub = mockGit({
-		"diff-index --quiet HEAD --": { success: false },
-		"stash create": { success: true, stdout: "abc123hash\n" }
-	});
-	try {
-		const hash = await Git.createStash();
-		assertEquals(hash, "abc123hash");
-	} finally {
-		commandStub.restore();
-	}
-});
-
-Deno.test("createStash - returns null if clean", async () => {
-	const commandStub = mockGit({
-		"diff-index --quiet HEAD --": { success: true }
-	});
-	try {
-		const hash = await Git.createStash();
-		assertEquals(hash, null);
-	} finally {
-		commandStub.restore();
-	}
-});
-
 Deno.test("getNextRunBranch - increments index", async () => {
 	const prefix = getRunBranchPrefix("123");
 	const commandStub = mockGit({
@@ -124,21 +77,6 @@ Deno.test("getNextRunBranch - starts at 1", async () => {
 	try {
 		const branch = await Git.getNextRunBranch("456");
 		assertEquals(branch, getRunBranchName("456", 1));
-	} finally {
-		commandStub.restore();
-	}
-});
-
-Deno.test("applyStash - throws on conflict", async () => {
-	const commandStub = mockGit({
-		"stash apply hash123": { success: false, stderr: "Merge conflict in file.txt" }
-	});
-	try {
-		await assertRejects(
-			async () => await Git.applyStash("path", "hash123"),
-			Error,
-			"Conflict detected"
-		);
 	} finally {
 		commandStub.restore();
 	}

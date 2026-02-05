@@ -25,14 +25,6 @@ export async function runCommand(args: Args) {
   // 2. Git Worktree Prep
   let worktreePath = "";
   try {
-    const isDirty = await Git.isGitDirty();
-    let stashHash: string | null = null;
-
-    if (isDirty) {
-      console.log("Creating stash for tracked files...");
-      stashHash = await Git.createStash();
-    }
-
     console.log("Resolving branch structure...");
     const baseBranch = await Git.resolveBaseBranch(taskId);
     const runBranch = await Git.getNextRunBranch(taskId);
@@ -52,11 +44,6 @@ export async function runCommand(args: Args) {
       `Creating worktree at ${worktreePath} based on ${baseBranch}...`,
     );
     await Git.createWorktree(runBranch, baseBranch, worktreePath);
-
-    if (stashHash) {
-      console.log(`Applying stash ${stashHash}...`);
-      await Git.applyStash(worktreePath, stashHash);
-    }
 
     // 3. File Synchronization
     console.log("Synchronizing untracked files...");
@@ -162,6 +149,18 @@ export async function runCommand(args: Args) {
     console.error(`\n❌ Execution Failed:`);
     console.error(e instanceof Error ? e.message : String(e));
     console.log(`Logs available in: ${worktreePath}`);
+
+    try {
+      const stderr = await Deno.readTextFile(join(worktreePath, "stderr.log"));
+      if (stderr.trim()) {
+        console.error(`\n--- Stderr Output ---`);
+        console.error(stderr.trim());
+        console.error(`---------------------`);
+      }
+    } catch {
+      // Ignore errors reading stderr (e.g. file not created)
+    }
+
     Deno.exit(1);
   }
 }
