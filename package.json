@@ -3,7 +3,9 @@
   "version": "0.0.2",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "cd cli && deno task test"
+  },
   "keywords": [
     "ai",
     "ai-agent",
