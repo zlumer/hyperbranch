@@ -1,6 +1,6 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env
-import { parseArgs } from "jsr:@std/cli/parse-args"
-import { ensureDir } from "jsr:@std/fs"
+import { parseArgs } from "@std/cli/parse-args"
+import { ensureDir } from "@std/fs"
 import { TASKS_DIR } from "./utils/tasks.ts"
 import { createCommand } from "./commands/create.ts"
 import { connectCommand } from "./commands/connect.ts"

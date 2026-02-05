@@ -1,4 +1,4 @@
-import { parseArgs } from "jsr:@std/cli/parse-args"
+import { parseArgs } from "@std/cli/parse-args"
 import { TaskFile } from "../types.ts"
 import { checkTaskExists, saveTask } from "../utils/loadTask.ts"
 import { generateTaskId, getTaskPath } from "../utils/tasks.ts"

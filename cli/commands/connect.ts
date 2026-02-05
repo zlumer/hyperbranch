@@ -1,4 +1,4 @@
-import { parseArgs } from "jsr:@std/cli/parse-args"
+import { parseArgs } from "@std/cli/parse-args"
 import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts"
 import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts"
 

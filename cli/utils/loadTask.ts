@@ -1,6 +1,6 @@
-import { exists } from "jsr:@std/fs/exists"
-import { stringify as stringifyYaml } from "jsr:@std/yaml"
-import { parse as parseYaml } from "jsr:@std/yaml/parse"
+import { exists } from "@std/fs/exists"
+import { stringify as stringifyYaml } from "@std/yaml"
+import { parse as parseYaml } from "@std/yaml/parse"
 import { TaskFile, TaskFrontmatter } from "../types.ts"
 import { getTaskPath } from "./tasks.ts"
 

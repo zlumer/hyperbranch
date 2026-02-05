@@ -1,4 +1,4 @@
-import { join } from "jsr:@std/path"
+import { join } from "@std/path"
 
 // --- Configuration ---
 export const TASKS_DIR = join(Deno.cwd(), ".hyperbranch/tasks")
