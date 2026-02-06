@@ -26,6 +26,7 @@ export async function prepareWorktreeAssets(
   await copy(join(assetsDir, "run.sh"), join(worktreePath, "run.sh"), {
     overwrite: true,
   });
+  await Deno.chmod(join(worktreePath, "run.sh"), 0o755);
 
   // 2. Dockerfile (if not custom)
   if (!customDockerfile) {
@@ -68,7 +69,7 @@ export async function runContainer(
     ...config.env, // Pass user envs
     HB_IMAGE: config.image,
     HB_NAME: config.name || "",
-    HB_CMD: config.exec.map((c) => `"${c}"`).join(" "), // Naive quoting, simpler for now
+    HB_CMD: config.exec.join(" "), // Removed naive quoting
     HB_USER: config.user,
     HB_ARGS: [
       ...config.mounts,
@@ -102,14 +103,14 @@ export async function runContainer(
   let cid = "";
   console.log("Waiting for container to start...");
   
-  for (let i = 0; i < 100; i++) { // Wait up to 10s
+  for (let i = 0; i < 600; i++) { // Wait up to 300s (5m) for image pull etc
     try {
       cid = await Deno.readTextFile(cidFile);
       if (cid.trim()) break;
     } catch {
       // wait
     }
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   if (cid.trim()) {
