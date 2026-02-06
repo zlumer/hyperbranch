@@ -23,6 +23,7 @@ export async function runCommand(args: Args) {
   const config = await loadConfig();
 
   // 2. Git Worktree Prep
+  let safeBranchName = "";
   let worktreePath = "";
   try {
     console.log("Resolving branch structure...");
@@ -34,7 +35,7 @@ export async function runCommand(args: Args) {
     // Git worktree path usually creates directories.
     // Let's use a flat folder name to avoid deep nesting issues if branch has many slashes?
     // Spec says: .hyperbranch/worktrees/<branch-name>
-    const safeBranchName = runBranch.replace(/\//g, "-");
+    safeBranchName = runBranch.replace(/\//g, "-");
     worktreePath = resolve(
       WORKTREES_DIR(),
       safeBranchName,
