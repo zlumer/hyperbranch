@@ -7,7 +7,7 @@ import * as Git from "../utils/git.ts";
 import * as System from "../utils/system.ts";
 import * as Docker from "../utils/docker.ts";
 import { getTaskPath } from "../utils/tasks.ts";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { WORKTREES_DIR, HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
 
 export async function runCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -46,14 +46,14 @@ export async function runCommand(args: Args) {
     );
     await Git.createWorktree(runBranch, baseBranch, worktreePath);
 
-    // 3. File Synchronization
-    console.log("Synchronizing untracked files...");
-    await Git.copyUntrackedFiles(worktreePath);
+    // 3. File Synchronization // -- don't do this
+    // console.log("Synchronizing untracked files...");
+    // await Git.copyUntrackedFiles(worktreePath);
 
-    if (config.copy.include.length > 0 || config.copy.includeDirs.length > 0) {
-      console.log(`Copying ignored files...`);
-      await Git.copyIgnoredFiles(worktreePath, config.copy);
-    }
+    // if (config.copy.include.length > 0 || config.copy.includeDirs.length > 0) {
+    //   console.log(`Copying ignored files...`);
+    //   await Git.copyIgnoredFiles(worktreePath, config.copy);
+    // }
 
     // 4. Script Generation
     console.log("Generating execution assets...");
@@ -109,7 +109,8 @@ export async function runCommand(args: Args) {
   }
 
   // Command construction
-  let execCmd = ["npx", "-y", "opencode-ai", `task-${taskId}.md`]; // Default
+  const taskFile = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
+  let execCmd = ["npx", "-y", "opencode-ai", "run", "--file", taskFile, "--", "Please complete this task."]; // Default
 
   if (args["exec"]) {
     execCmd = (args["exec"] as string).split(" ");
