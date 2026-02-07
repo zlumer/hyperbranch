@@ -28,7 +28,7 @@ What is NOT covered:
   - [ ] delete dangling worktrees (no branch) without `-f`
   - [ ] prevent deletion of worktrees with uncommitted changes (unless `-f`)
   - [ ] kill working containers before deleting worktrees (if `-f` is provided)
-- [ ] output stdout&stderr into a single file in addition to separate stdout/stderr files (as implemented now)
+- [ ] run `docker logs` on the container in background and write to a new log file (e.g. `docker.log`)
 - [ ] create "run" files (`Dockerfile`, `run.sh`, `hb.cid`, `stderr.log`, `stdout.log`) in a subdirectory (e.g., `.hyperbranch/.current-run/`) instead of the root of the worktree (make sure that there's a single config function to get parent dir to these files and it's used everywhere in the codebase)
 - [ ] commit all changed files at the end of the task run
 	- [ ] for untracked files make an intelligent decision: add with `git add` or ignore in `.gitignore`
