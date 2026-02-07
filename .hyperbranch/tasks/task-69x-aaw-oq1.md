@@ -20,6 +20,8 @@ What is NOT covered:
 
 ## Subtasks
 - [ ] commit task automatically after `hb create`
+- [ ] create base branch off the current branch (where `hb run` is called)
+- [ ] check if the task file exists in the branch, and if not, throw an error immediately
 - [ ] skip untracked file synchronization during `hb run`
 - [ ] refactor garbage collection algorithm:
   - [ ] delete merged branches without `-f`

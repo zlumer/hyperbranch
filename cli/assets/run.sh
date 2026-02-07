@@ -28,7 +28,6 @@ if [ -n "$HB_NAME" ]; then
 fi
 
 exec docker run \
-  --rm \
   --init \
   $DOCKER_FLAGS \
   $DOCKER_NAME_FLAG \
