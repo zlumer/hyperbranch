@@ -2,6 +2,7 @@ import { parseArgs } from "@std/cli/parse-args"
 import { TaskFile } from "../types.ts"
 import { checkTaskExists, saveTask } from "../utils/loadTask.ts"
 import { generateTaskId, getTaskPath } from "../utils/tasks.ts"
+import { add, commit } from "../utils/git.ts"
 
 // --- Commands ---
 export async function createCommand(args: ReturnType<typeof parseArgs>)
@@ -43,6 +44,10 @@ export async function createCommand(args: ReturnType<typeof parseArgs>)
 	}
 
 	await saveTask(task)
+
+	await add([task.path])
+	await commit(`chore: create task ${id}`)
+
 	console.log(`Task created: ${id}`)
 	console.log(`Path: ${task.path}`)
 

@@ -19,7 +19,7 @@ function mockShellRun(
       const args = options?.args || [];
 
       // Update to match: sh -c "nohup ./run.sh ... &"
-      if (cmd === "sh" && args[0] === "-c" && args[1].includes("./run.sh")) {
+      if (cmd === "sh" && args[0] === "-c" && args[1].includes("run.sh")) {
         // Verify environment variables
         if (options?.env) {
           for (const [k, v] of Object.entries(envChecks)) {
@@ -96,16 +96,18 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
     { stdout: "Script Output", stderr: "", code: 0 },
   );
 
-  const config: Docker.DockerConfig = {
+    const config: Docker.DockerConfig = {
     image: "test-image",
     exec: ["echo", "hello"],
     workdir: "/app",
     hostWorkdir: tempDir,
+    runDir: tempDir,
     mounts: ["-v /cache:/cache"],
     env: { FOO: "BAR" },
     user: "1000:1000",
     dockerArgs: ["--network", "host"],
   };
+
 
   try {
     let capturedCid = "";

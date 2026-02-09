@@ -3,13 +3,18 @@ import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
 import { getRunBranchName, getRunBranchPrefix } from "../utils/branch-naming.ts";
 import { getTaskPath } from "../utils/tasks.ts";
 
 export async function rmCommand(args: Args) {
   const target = args._[1] ? String(args._[1]) : undefined;
   const force = args.force || args.f || false;
+
+  if (args.sweep) {
+    await sweep(force);
+    return;
+  }
 
   if (!target) {
     await listCandidates(args, force);
@@ -41,9 +46,8 @@ async function sweep(force: boolean) {
     return;
   }
 
-  const cleanRuns: { taskId: string, runIndex: number }[] = [];
+  console.log("Sweeping worktrees...");
 
-  // 1. Identify candidates
   for await (const entry of Deno.readDir(worktreesDir)) {
     if (!entry.isDirectory) continue;
     
@@ -55,47 +59,77 @@ async function sweep(force: boolean) {
     const worktreePath = join(worktreesDir, entry.name);
     const runBranch = getRunBranchName(taskId, runIndex);
 
-    // Active Check
-    const cidFile = join(worktreePath, "hb.cid");
+    // 1. Check Dirty Status
+    // If dirty, skip unless -f (force)
+    const isDirty = await Git.status(worktreePath);
+    if (isDirty && !force) {
+      console.log(`Skipping ${entry.name}: Worktree is dirty (use -f to override).`);
+      continue;
+    }
+
+    // 2. Check Missing/Merged Branch
+    let safeToRemove = false;
+    const branchExists = await Git.branchExists(runBranch);
+
+    if (!branchExists) {
+      // Dangling worktree -> Safe
+      safeToRemove = true;
+    } else {
+       // 3. Check Merged Status
+       const baseBranch = await Git.resolveBaseBranch(taskId);
+       const isMerged = await Git.isBranchMerged(runBranch, baseBranch);
+       if (isMerged) {
+         safeToRemove = true;
+       }
+    }
+
+    if (!safeToRemove && !force) {
+      console.log(`Skipping ${entry.name}: Branch ${runBranch} is not merged (use -f to override).`);
+      continue;
+    }
+
+    // Execution
+    console.log(`Removing ${entry.name}...`);
+
+    // Remove Container
+    const cidFile = join(getRunDir(worktreePath), "hb.cid");
     if (await exists(cidFile)) {
       try {
         const cid = (await Deno.readTextFile(cidFile)).trim();
         if (cid) {
-           const { status } = await Docker.getContainerStatus(cid);
-           if (status.toLowerCase() === "running") continue;
+           await Docker.removeContainer(cid, true);
         }
-      } catch { continue; }
+      } catch (e) {
+         // Ignore container removal errors
+      }
     }
 
-    // Clean Check
+    // Remove Worktree
     try {
-       const baseBranch = await Git.resolveBaseBranch(taskId);
-       const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
-       if (unmerged.trim().length > 0) continue;
-    } catch { continue; }
+      await Git.removeWorktree(worktreePath, true);
+    } catch (e) {
+      console.warn(`Warning: Failed to remove worktree via git: ${e}`);
+      try {
+         await Deno.remove(worktreePath, { recursive: true });
+      } catch {}
+    }
 
-    cleanRuns.push({ taskId, runIndex });
-  }
-
-  if (cleanRuns.length === 0) {
-    console.log("No clean, inactive runs to sweep.");
-    return;
-  }
-
-  // 2. Confirmation
-  console.log(`Found ${cleanRuns.length} clean, inactive runs.`);
-  // In a non-interactive CLI, we might require --force for sweep or just do it.
-  // The user explicitly typed --sweep, so let's proceed but maybe log.
-  
-  for (const r of cleanRuns) {
-      await removeRun(r.taskId, r.runIndex, force);
+    // Remove Branch
+    if (branchExists) {
+      try {
+        await Git.deleteBranch(runBranch, true);
+      } catch (e) {
+        console.warn(`Warning: Failed to delete branch ${runBranch}: ${e}`);
+      }
+    }
   }
   
-  // 3. Prune Git Worktrees
+  // Prune Git Worktrees
   try {
-     console.log("Pruning git worktrees...");
      await Git.git(["worktree", "prune"]);
   } catch {}
+  
+  console.log("Sweep complete.");
 }
 
 async function listCandidates(args: Args, force: boolean) {
@@ -123,7 +157,7 @@ async function listCandidates(args: Args, force: boolean) {
 
     // 1. Check Active (Skip if active)
     let isActive = false;
-    const cidFile = join(worktreePath, "hb.cid");
+    const cidFile = join(getRunDir(worktreePath), "hb.cid");
     if (await exists(cidFile)) {
       try {
         const cid = (await Deno.readTextFile(cidFile)).trim();
@@ -151,12 +185,6 @@ async function listCandidates(args: Args, force: boolean) {
     }
 
     candidates.push(`${taskId}/${runIndex}`);
-  }
-
-  // Check for sweep flag
-  if (args.sweep) {
-    await sweep(force);
-    return;
   }
 
   console.log("The following runs are clean and inactive (safe to remove):");
@@ -198,7 +226,7 @@ async function removeTask(taskId: string, force: boolean) {
        
        if (await exists(worktreePath)) {
           // Check Active
-          const cidFile = join(worktreePath, "hb.cid");
+          const cidFile = join(getRunDir(worktreePath), "hb.cid");
           if (await exists(cidFile)) {
              try {
                const cid = (await Deno.readTextFile(cidFile)).trim();
@@ -275,7 +303,7 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
     }
   }
 
-  const cidFile = join(worktreePath, "hb.cid");
+  const cidFile = join(getRunDir(worktreePath), "hb.cid");
   let cid = "";
   if (await exists(cidFile)) {
     try {

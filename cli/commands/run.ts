@@ -1,13 +1,10 @@
 import { Args } from "@std/cli/parse-args";
-import { ensureDir } from "@std/fs/ensure-dir";
-import { copy } from "@std/fs/copy";
-import { isAbsolute, join, resolve } from "@std/path";
+import { join, resolve } from "@std/path";
 import { loadConfig } from "../utils/config.ts";
 import * as Git from "../utils/git.ts";
 import * as System from "../utils/system.ts";
 import * as Docker from "../utils/docker.ts";
-import { getTaskPath } from "../utils/tasks.ts";
-import { WORKTREES_DIR, HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
+import { WORKTREES_DIR, HYPERBRANCH_DIR, TASKS_DIR_NAME, getRunDir } from "../utils/paths.ts";
 
 export async function runCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -25,9 +22,19 @@ export async function runCommand(args: Args) {
   // 2. Git Worktree Prep
   let safeBranchName = "";
   let worktreePath = "";
+  let runDir = "";
   try {
     console.log("Resolving branch structure...");
     const baseBranch = await Git.resolveBaseBranch(taskId);
+    
+    // Verify task file exists in base branch
+    const taskFileRelative = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
+    const taskExists = await Git.checkFileExistsInBranch(baseBranch, taskFileRelative);
+    
+    if (!taskExists) {
+      throw new Error(`Task file '${taskFileRelative}' not found in base branch '${baseBranch}'. Cannot start run.`);
+    }
+
     const runBranch = await Git.getNextRunBranch(taskId);
 
     // Worktree path: .hyperbranch/worktrees/<runBranch>
@@ -40,11 +47,38 @@ export async function runCommand(args: Args) {
       WORKTREES_DIR(),
       safeBranchName,
     );
+    
+    // Define run directory
+    runDir = getRunDir(worktreePath);
 
     console.log(
       `Creating worktree at ${worktreePath} based on ${baseBranch}...`,
     );
     await Git.createWorktree(runBranch, baseBranch, worktreePath);
+
+    // Gitignore Check
+    const gitignorePath = join(worktreePath, ".gitignore");
+    const ignoreEntry = ".hyperbranch/.current-run/";
+    try {
+      let content = "";
+      try {
+        content = await Deno.readTextFile(gitignorePath);
+      } catch {
+        // File doesn't exist, start empty
+      }
+      
+      if (!content.includes(ignoreEntry)) {
+        console.log("Adding .hyperbranch/.current-run/ to .gitignore...");
+        const newContent = content.endsWith("\n") || content === "" 
+          ? content + ignoreEntry + "\n" 
+          : content + "\n" + ignoreEntry + "\n";
+        
+        await Deno.writeTextFile(gitignorePath, newContent);
+        await Git.add([".gitignore"], worktreePath);
+      }
+    } catch (e) {
+      console.warn("Warning: Failed to update .gitignore:", e);
+    }
 
     // 3. File Synchronization // -- don't do this
     // console.log("Synchronizing untracked files...");
@@ -57,7 +91,7 @@ export async function runCommand(args: Args) {
 
     // 4. Script Generation
     console.log("Generating execution assets...");
-    await Docker.prepareWorktreeAssets(worktreePath, args["dockerfile"] as string);
+    await Docker.prepareWorktreeAssets(worktreePath, runDir, args["dockerfile"] as string);
 
   } catch (e) {
     console.error("\n❌ Setup Failed:");
@@ -131,8 +165,12 @@ export async function runCommand(args: Args) {
     exec: execCmd,
     workdir: "/app",
     hostWorkdir: worktreePath,
+    runDir,
     mounts,
-    env,
+    env: {
+      ...env,
+      HB_TASK_ID: taskId,
+    },
     user,
     dockerArgs: extraDockerArgs,
   };
@@ -146,15 +184,15 @@ export async function runCommand(args: Args) {
       console.log(`Container started with ID: ${cid}`);
     });
     console.log(`\n✅ Task started successfully.`);
-    console.log(`Logs available in: ${worktreePath}`);
+    console.log(`Logs available in: ${runDir}`);
     console.log(`Use 'hb logs ${taskId}' to view output.`);
   } catch (e) {
     console.error(`\n❌ Execution Failed:`);
     console.error(e instanceof Error ? e.message : String(e));
-    console.log(`Logs available in: ${worktreePath}`);
+    console.log(`Logs available in: ${runDir}`);
 
     try {
-      const stderr = await Deno.readTextFile(join(worktreePath, "stderr.log"));
+      const stderr = await Deno.readTextFile(join(runDir, "stderr.log"));
       if (stderr.trim()) {
         console.error(`\n--- Stderr Output ---`);
         console.error(stderr.trim());

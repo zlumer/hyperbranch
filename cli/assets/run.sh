@@ -5,11 +5,20 @@
 set -e
 
 # Handle signals to propagate to the container
-trap 'echo "Caught SIGINT in script"; exit 130' SIGINT SIGTERM
+cleanup() {
+    echo "Caught SIGINT in script"
+    if [ -z "$HB_CID" ] && [ -f hb.cid ]; then
+        HB_CID=$(cat hb.cid)
+    fi
+    if [ -n "$HB_CID" ]; then
+        docker stop "$HB_CID"
+    fi
+    exit 130
+}
+trap cleanup SIGINT SIGTERM
 
 echo "Starting Docker Container..."
 echo "  Image: $HB_IMAGE"
-echo "  Command: $HB_CMD"
 
 # Determine if we should use -it (Interactive TTY)
 # We only use -it if both stdin (0) and stdout (1) are TTYs.
@@ -19,15 +28,14 @@ if [ -t 0 ] && [ -t 1 ]; then
     DOCKER_FLAGS="-it"
 fi
 
-# Using 'exec' to replace the shell process with Docker, 
-# ensuring signals go directly to Docker (though --init handles init process duties)
-
 DOCKER_NAME_FLAG=""
 if [ -n "$HB_NAME" ]; then
     DOCKER_NAME_FLAG="--name $HB_NAME"
 fi
 
-exec docker run \
+# Run container in detached mode
+docker run \
+  --detach \
   --init \
   $DOCKER_FLAGS \
   $DOCKER_NAME_FLAG \
@@ -37,4 +45,41 @@ exec docker run \
   $HB_ARGS \
   -v "$(pwd):/app" \
   "$HB_IMAGE" \
-  $HB_CMD
+  "$@" > /dev/null
+
+# Wait for container ID
+count=0
+while [ ! -s hb.cid ]; do
+  sleep 0.1
+  count=$((count+1))
+  if [ $count -gt 50 ]; then
+    echo "Error: Timed out waiting for hb.cid"
+    exit 1
+  fi
+done
+
+HB_CID=$(cat hb.cid)
+
+# 1. Logging
+# Start logging in background
+if [ -n "$HB_RUN_DIR" ]; then
+    docker logs -f "$HB_CID" > "$HB_RUN_DIR/docker.log" 2>&1 &
+else
+    docker logs -f "$HB_CID" > "docker.log" 2>&1 &
+fi
+LOG_PID=$!
+
+# 2. Wait for container to finish
+EXIT_CODE=$(docker wait "$HB_CID")
+wait "$LOG_PID"
+
+# 3. Auto-Commit and Cleanup
+if [ "$EXIT_CODE" -eq "0" ]; then
+    if [ -n "$HB_TASK_ID" ]; then
+        git add .
+        git commit -m "feat: complete task $HB_TASK_ID"
+    fi
+else
+    echo "Container exited with failure code: $EXIT_CODE"
+    exit "$EXIT_CODE"
+fi

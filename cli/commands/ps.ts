@@ -1,7 +1,7 @@
 
 import { join, basename } from "@std/path";
 import { exists } from "@std/fs/exists";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
 import * as Docker from "../utils/docker.ts";
 
 interface TaskStatus {
@@ -39,7 +39,7 @@ export async function psCommand() {
   for await (const entry of Deno.readDir(worktreesDir)) {
     if (entry.isDirectory) {
       const worktreePath = join(worktreesDir, entry.name);
-      const cidFile = join(worktreePath, "hb.cid");
+      const cidFile = join(getRunDir(worktreePath), "hb.cid");
 
       if (await exists(cidFile)) {
         const cid = (await Deno.readTextFile(cidFile)).trim();

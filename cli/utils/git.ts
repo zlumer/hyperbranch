@@ -21,6 +21,46 @@ export async function git(args: string[], cwd?: string): Promise<string> {
   return new TextDecoder().decode(output.stdout).trim();
 }
 
+export async function add(files: string[], cwd?: string): Promise<void> {
+  await git(["add", ...files], cwd);
+}
+
+export async function commit(message: string, cwd?: string): Promise<void> {
+  await git(["commit", "-m", message], cwd);
+}
+
+export async function getCurrentBranch(): Promise<string> {
+  return await git(["rev-parse", "--abbrev-ref", "HEAD"]);
+}
+
+export async function branchExists(branch: string): Promise<boolean> {
+  try {
+    await git(["rev-parse", "--verify", branch]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkFileExistsInBranch(branch: string, filePath: string): Promise<boolean> {
+  try {
+    await git(["cat-file", "-e", `${branch}:${filePath}`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function isBranchMerged(branch: string, base: string): Promise<boolean> {
+  try {
+    const output = await git(["branch", "--merged", base]);
+    const mergedBranches = output.split("\n").map(b => b.trim());
+    return mergedBranches.includes(branch);
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveBaseBranch(taskId: string): Promise<string> {
   try {
     const task = await loadTask(taskId);
@@ -38,7 +78,16 @@ export async function resolveBaseBranch(taskId: string): Promise<string> {
     // Task might not exist or load failed
   }
 
-  // Default branch (try main, then master)
+  // Fall back to current branch, then main, then master
+  try {
+    const current = await getCurrentBranch();
+    // Verify it exists (it should since we're on it, but safe practice)
+    await git(["rev-parse", "--verify", current]);
+    return current;
+  } catch {
+    // Detached HEAD or error
+  }
+
   try {
     await git(["rev-parse", "--verify", "main"]);
     return "main";
@@ -113,6 +162,19 @@ export async function deleteBranch(branch: string, force = false): Promise<void>
 export async function getUnmergedCommits(branch: string, base: string): Promise<string> {
   // Returns commits in branch that are not in base
   return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
+}
+
+export async function status(worktreePath: string): Promise<boolean> {
+  // Returns true if the worktree is dirty
+  try {
+    const output = await git(["status", "--porcelain"], worktreePath);
+    return output.trim().length > 0;
+  } catch {
+    // If git status fails (e.g. not a git repo), assume dirty for safety?
+    // Or maybe it's not a valid worktree.
+    // Let's assume dirty to be safe unless we are sure.
+    return true;
+  }
 }
 
 export async function copyUntrackedFiles(dest: string): Promise<void> {

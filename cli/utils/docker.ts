@@ -1,5 +1,5 @@
 import { dirname, fromFileUrl, join } from "@std/path";
-import { exists } from "@std/fs/exists";
+import { ensureDir } from "@std/fs/ensure-dir";
 import { copy } from "@std/fs/copy";
 
 export interface DockerConfig {
@@ -9,6 +9,7 @@ export interface DockerConfig {
   exec: string[];
   workdir: string; // The path INSIDE the container (mapped to worktree)
   hostWorkdir: string; // The path ON HOST (the worktree)
+  runDir: string; // The path ON HOST where run files are stored
   mounts: string[];
   env: Record<string, string>;
   user: string;
@@ -17,24 +18,33 @@ export interface DockerConfig {
 
 export async function prepareWorktreeAssets(
   worktreePath: string,
+  runDir: string,
   customDockerfile?: string,
 ): Promise<void> {
+  // Ensure run directory exists
+  await ensureDir(runDir);
+
   // Locate assets relative to this module
   const assetsDir = join(dirname(fromFileUrl(import.meta.url)), "..", "assets");
 
   // 1. run.sh
-  await copy(join(assetsDir, "run.sh"), join(worktreePath, "run.sh"), {
+  const runScriptPath = join(runDir, "run.sh");
+  await copy(join(assetsDir, "run.sh"), runScriptPath, {
     overwrite: true,
   });
-  await Deno.chmod(join(worktreePath, "run.sh"), 0o755);
+  await Deno.chmod(runScriptPath, 0o755);
 
   // 2. Dockerfile (if not custom)
   if (!customDockerfile) {
     await copy(
       join(assetsDir, "Dockerfile"),
-      join(worktreePath, "Dockerfile"),
+      join(runDir, "Dockerfile"),
       { overwrite: true },
     );
+  } else {
+    // If custom, copy it to runDir too for consistency? Or just use it?
+    // Let's copy it to runDir so we have a record
+    await copy(customDockerfile, join(runDir, "Dockerfile"), { overwrite: true });
   }
 }
 
@@ -56,21 +66,22 @@ export async function buildImage(
 
 export async function runContainer(
   config: DockerConfig,
-  logDir: string,
+  _logDir: string,
   onStart: (id: string) => void,
 ): Promise<void> {
   // Prepare log files
-  const stdoutPath = join(logDir, "stdout.log");
-  const stderrPath = join(logDir, "stderr.log");
-  const cidFile = join(config.hostWorkdir, "hb.cid");
+  const stdoutPath = join(config.runDir, "stdout.log");
+  const stderrPath = join(config.runDir, "stderr.log");
+  const cidFile = join(config.runDir, "hb.cid");
 
   // Construct Environment Variables for run.sh
   const scriptEnv: Record<string, string> = {
     ...config.env, // Pass user envs
     HB_IMAGE: config.image,
     HB_NAME: config.name || "",
-    HB_CMD: config.exec.join(" "), // Removed naive quoting
     HB_USER: config.user,
+    HB_RUN_DIR: config.runDir,
+    HB_CID_FILE: cidFile,
     HB_ARGS: [
       ...config.mounts,
       ...config.dockerArgs,
@@ -83,12 +94,15 @@ export async function runContainer(
   // This allows the Deno process to exit while the container keeps running
   console.log(`Executing Docker script (run.sh) in background...`);
 
+  const runScript = join(config.runDir, "run.sh");
+  const escapedArgs = config.exec.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`).join(" ");
+
   // Using sh -c to wrap the nohup command
-  // stdout.log and stderr.log are created in the worktree (cwd)
+  // stdout.log and stderr.log are created in the runDir
   const cmd = new Deno.Command("sh", {
     args: [
       "-c",
-      `nohup ./run.sh > stdout.log 2> stderr.log < /dev/null &`,
+      `nohup "${runScript}" ${escapedArgs} > "${stdoutPath}" 2> "${stderrPath}" < /dev/null &`,
     ],
     cwd: config.hostWorkdir,
     env: scriptEnv,

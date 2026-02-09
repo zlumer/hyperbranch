@@ -3,7 +3,7 @@ import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
 
 import { getRunBranchName } from "../utils/branch-naming.ts";
 
@@ -55,7 +55,7 @@ export async function logsCommand(args: Args) {
       Deno.exit(1);
   }
 
-  const logFile = join(worktreePath, "stdout.log");
+  const logFile = join(getRunDir(worktreePath), "docker.log");
 
   if (!(await exists(logFile))) {
       console.error(`Log file not found at ${logFile}`);

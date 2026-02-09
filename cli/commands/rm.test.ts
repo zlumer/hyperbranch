@@ -5,6 +5,8 @@ import { join } from "@std/path";
 import { ensureDir } from "@std/fs";
 import { parseArgs } from "@std/cli/parse-args";
 
+import { getRunDir } from "../utils/paths.ts";
+
 // We will import this once implemented
 import { rmCommand } from "./rm.ts";
 
@@ -18,13 +20,18 @@ function mockGit(outputs: Record<string, { stdout?: string; stderr?: string; suc
     if (commandName !== "git" && commandName !== "docker") throw new Error(`Unexpected command: ${commandName}`);
     
     const args = opts?.args || [];
+    const cwd = opts?.cwd;
     const commandStr = `${commandName} ${args.join(" ")}`;
     
-    // Find matching output (simple exact match or prefix for flexibility)
-    let result = outputs[commandStr];
+    // 1. Try match with CWD prefix: "[cwd] command"
+    let result = cwd ? outputs[`[${cwd}] ${commandStr}`] : undefined;
+
+    // 2. Try exact match without CWD
+    if (!result) result = outputs[commandStr];
+
+    // 3. Fallback: try to find a key that is a prefix of commandStr (for dynamic paths in args)
     if (!result) {
-        // Fallback: try to find a key that is a prefix (e.g. for dynamic paths)
-        const key = Object.keys(outputs).find(k => commandStr.startsWith(k));
+        const key = Object.keys(outputs).find(k => commandStr.startsWith(k) && !k.startsWith("["));
         if (key) result = outputs[key];
     }
 
@@ -166,9 +173,11 @@ Deno.test("hb rm <task>/<run> - fail on active run", async () => {
     const runDir = join(env.worktreesDir, "task-123-1");
     await ensureDir(runDir);
     // Simulate active run
-    await Deno.writeTextFile(join(runDir, "hb.cid"), "container-id");
+    const runRunDir = getRunDir(runDir);
+    await ensureDir(runRunDir);
+    await Deno.writeTextFile(join(runRunDir, "hb.cid"), "container-id");
     
-    // We might need to mock Docker.getContainerStatus if implemented, 
+    // We might need to mock Docker.getContainerStatus if implemented,  
     // but usually existence of lock file/CID implies check needed.
 
     const args = parseArgs(["rm", "123/1"]);
@@ -187,7 +196,9 @@ Deno.test("hb rm <task>/<run> --force - removes active container", async () => {
   // Mock active run
   const runDir = join(env.worktreesDir, "task-123-1");
   await ensureDir(runDir);
-  await Deno.writeTextFile(join(runDir, "hb.cid"), "active-cid");
+  const runRunDir = getRunDir(runDir);
+  await ensureDir(runRunDir);
+  await Deno.writeTextFile(join(runRunDir, "hb.cid"), "active-cid");
 
   const gitStub = mockGit({
      "git rev-parse --verify task/123/1": { success: true },
@@ -318,7 +329,9 @@ Deno.test("hb rm <task> --force - remove everything despite dirty/active", async
     await Deno.writeTextFile(join(env.tasksDir, "task-123.md"), "# Task 123");
     await ensureDir(join(env.worktreesDir, "task-123-1"));
     // Active run
-    await Deno.writeTextFile(join(env.worktreesDir, "task-123-1", "hb.cid"), "cid");
+    const runRunDir = getRunDir(join(env.worktreesDir, "task-123-1"));
+    await ensureDir(runRunDir);
+    await Deno.writeTextFile(join(runRunDir, "hb.cid"), "cid");
 
     const args = parseArgs(["rm", "123", "--force"]);
     await rmCommand(args);
@@ -356,8 +369,11 @@ Deno.test("hb rm (no args) - list clean inactive candidates", async () => {
     // Run 2 (Dirty, Inactive)
     await ensureDir(join(env.worktreesDir, "task-123-2"));
     // Run 3 (Active)
-    await ensureDir(join(env.worktreesDir, "task-123-3"));
-    await Deno.writeTextFile(join(env.worktreesDir, "task-123-3", "hb.cid"), "cid");
+    const run3Dir = join(env.worktreesDir, "task-123-3");
+    await ensureDir(run3Dir);
+    const run3RunDir = getRunDir(run3Dir);
+    await ensureDir(run3RunDir);
+    await Deno.writeTextFile(join(run3RunDir, "hb.cid"), "cid");
 
     const args = parseArgs(["rm"]);
     await rmCommand(args);
@@ -379,37 +395,40 @@ Deno.test("hb rm (no args) - list clean inactive candidates", async () => {
 
 Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
   const env = setupTestEnv();
+  const run1Dir = join(env.worktreesDir, "task-123-1");
+  const run2Dir = join(env.worktreesDir, "task-123-2");
+  
   const gitStub = mockGit({
     "git rev-parse --verify main": { success: true },
-    // Clean run
+    
+    // Run 1: Clean, Merged
+    [`[${run1Dir}] git status --porcelain`]: { success: true, stdout: "" }, // Clean
     "git rev-parse --verify task/123/1": { success: true },
-    "git log task/123/1 ^main --oneline": { success: true, stdout: "" },
-    [`git worktree remove ${join(env.worktreesDir, "task-123-1")}`]: { success: true },
-    "git branch -d task/123/1": { success: true },
-    // Dirty run
-    "git rev-parse --verify task/123/2": { success: true },
-    "git log task/123/2 ^main --oneline": { success: true, stdout: "dirty" },
+    "git rev-parse --verify task/123": { success: false }, // Base
+    "git branch --merged main": { success: true, stdout: "task/123/1" },
+    
+    // Run 2: Dirty
+    [`[${run2Dir}] git status --porcelain`]: { success: true, stdout: "M dirty.txt" }, // Dirty
+    
+    // Execution
+    [`git worktree remove ${run1Dir} --force`]: { success: true },
+    "git branch -D task/123/1": { success: true },
+    
     // Worktree prune
     "git worktree prune": { success: true },
   });
 
   try {
     // 1. Clean Run
-    await ensureDir(join(env.worktreesDir, "task-123-1"));
+    await ensureDir(run1Dir);
     // 2. Dirty Run
-    await ensureDir(join(env.worktreesDir, "task-123-2"));
+    await ensureDir(run2Dir);
 
     const args = parseArgs(["rm", "--sweep"]);
     await rmCommand(args);
 
-    // Assert: Only task-123-1 removal was attempted (via mock calls or side effect)
-    // We can't easily spy on internal function calls in Deno without exporting them.
-    // But we can check if directory removal was attempted via Git mock.
-    // The "git worktree remove ... task-123-1" should be called.
-    // "git worktree remove ... task-123-2" should NOT be called.
-    
-    // We can rely on the mock throwing "Unmocked" if 123-2 is attempted.
-
+    // Verify Run 1 removed (mock call asserted implicitly by absence of error)
+    // Run 2 should be skipped (dirty)
   } finally {
     gitStub.restore();
     env.teardown();
@@ -418,15 +437,20 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
 
 Deno.test("hb rm --sweep --force - cleans merged runs with force", async () => {
   const env = setupTestEnv();
+  const run1Dir = join(env.worktreesDir, "task-123-1");
+  
   const gitStub = mockGit({
     "git rev-parse --verify main": { success: true },
-    // Run 1: Merged (clean log)
-    "git rev-parse --verify task/123/1": { success: true },
-    "git log task/123/1 ^main --oneline": { success: true, stdout: "" }, // Merged
     
+    // Run 1: Clean, Merged
+    [`[${run1Dir}] git status --porcelain`]: { success: true, stdout: "" },
+    "git rev-parse --verify task/123/1": { success: true },
+    "git branch --merged main": { success: true, stdout: "task/123/1" },
+    "git rev-parse --verify task/123": { success: false }, // Base
+
     // Attempt remove WITH force
-    [`git worktree remove ${join(env.worktreesDir, "task-123-1")} --force`]: { success: true },
-    "git branch -D task/123/1": { success: true }, 
+    [`git worktree remove ${run1Dir} --force`]: { success: true },
+    "git branch -D task/123/1": { success: true },
     
     // Worktree prune
     "git worktree prune": { success: true },
@@ -434,7 +458,7 @@ Deno.test("hb rm --sweep --force - cleans merged runs with force", async () => {
 
   try {
     // 1. Merged Run
-    await ensureDir(join(env.worktreesDir, "task-123-1"));
+    await ensureDir(run1Dir);
 
     const args = parseArgs(["rm", "--sweep", "--force"]);
     await rmCommand(args);

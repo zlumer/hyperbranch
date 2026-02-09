@@ -3,7 +3,7 @@ import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
 
 export async function stopCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -26,7 +26,7 @@ export async function stopCommand(args: Args) {
     safeBranchName,
   );
 
-  const cidFile = join(worktreePath, "hb.cid");
+  const cidFile = join(getRunDir(worktreePath), "hb.cid");
 
   if (!(await exists(cidFile))) {
       console.error(`CID file not found at ${cidFile}`);
