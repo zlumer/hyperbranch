@@ -3,25 +3,11 @@ import { parse } from "@std/toml";
 import { join } from "@std/path";
 import { deepMerge } from "@std/collections/deep-merge";
 
-export interface CopyConfig {
-  include: string[];
-  exclude: string[];
-  includeDirs: string[];
-  excludeDirs: string[];
-}
-
 export interface RunConfig {
-  copy: CopyConfig;
   env_vars: string[];
 }
 
 const DEFAULT_CONFIG: RunConfig = {
-  copy: {
-    include: [],
-    exclude: [],
-    includeDirs: [],
-    excludeDirs: [],
-  },
   env_vars: [],
 };
 
