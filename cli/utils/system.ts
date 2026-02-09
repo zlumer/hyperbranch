@@ -23,7 +23,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   if (await exists(join(cwd, "package-lock.json"))) {
     try {
       const npmCache = await runCmd(["npm", "config", "get", "cache"]);
-      mounts.push(`-v "${npmCache}:/root/.npm"`);
+      mounts.push(`-v ${npmCache}:/root/.npm`);
     } catch {
       // Ignore if npm not found or fails
     }
@@ -33,7 +33,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   if (await exists(join(cwd, "yarn.lock"))) {
     try {
       const yarnCache = await runCmd(["yarn", "cache", "dir"]);
-      mounts.push(`-v "${yarnCache}:/usr/local/share/.cache/yarn"`);
+      mounts.push(`-v ${yarnCache}:/usr/local/share/.cache/yarn`);
     } catch {
       // Ignore
     }
@@ -43,7 +43,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   if (await exists(join(cwd, "pnpm-lock.yaml"))) {
     try {
       const pnpmStore = await runCmd(["pnpm", "store", "path"]);
-      mounts.push(`-v "${pnpmStore}:/root/.local/share/pnpm/store"`);
+      mounts.push(`-v ${pnpmStore}:/root/.local/share/pnpm/store`);
     } catch {
       // Ignore
     }
@@ -63,7 +63,7 @@ export async function getAgentConfigMount(): Promise<string> {
     await Deno.mkdir(opencodeDir, { recursive: true });
   }
   // Read-only mount
-  return `-v "${opencodeDir}:/root/.opencode:ro"`;
+  return `-v ${opencodeDir}:/root/.opencode:ro`;
 }
 
 export function getEnvVars(keys: string[]): Record<string, string> {

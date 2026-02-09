@@ -4,11 +4,14 @@
 
 set -e
 
+# Use HB_CID_FILE if provided, else default to hb.cid
+CID_FILE="${HB_CID_FILE:-hb.cid}"
+
 # Handle signals to propagate to the container
 cleanup() {
     echo "Caught SIGINT in script"
-    if [ -z "$HB_CID" ] && [ -f hb.cid ]; then
-        HB_CID=$(cat hb.cid)
+    if [ -z "$HB_CID" ] && [ -f "$CID_FILE" ]; then
+        HB_CID=$(cat "$CID_FILE")
     fi
     if [ -n "$HB_CID" ]; then
         docker stop "$HB_CID"
@@ -39,7 +42,7 @@ docker run \
   --init \
   $DOCKER_FLAGS \
   $DOCKER_NAME_FLAG \
-  --cidfile "hb.cid" \
+  --cidfile "$CID_FILE" \
   -w "/app" \
   -u "$HB_USER" \
   $HB_ARGS \
@@ -49,7 +52,7 @@ docker run \
 
 # Wait for container ID
 count=0
-while [ ! -s hb.cid ]; do
+while [ ! -s "$CID_FILE" ]; do
   sleep 0.1
   count=$((count+1))
   if [ $count -gt 50 ]; then
@@ -58,7 +61,7 @@ while [ ! -s hb.cid ]; do
   fi
 done
 
-HB_CID=$(cat hb.cid)
+HB_CID=$(cat "$CID_FILE")
 
 # 1. Logging
 # Start logging in background

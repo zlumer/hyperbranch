@@ -5,6 +5,7 @@ import * as Git from "../utils/git.ts";
 import * as System from "../utils/system.ts";
 import * as Docker from "../utils/docker.ts";
 import { WORKTREES_DIR, HYPERBRANCH_DIR, TASKS_DIR_NAME, getRunDir } from "../utils/paths.ts";
+import { parseArgsString } from "../utils/args.ts";
 
 export async function runCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -138,7 +139,7 @@ export async function runCommand(args: Args) {
   let execCmd = ["npx", "-y", "opencode-ai", "run", "--file", taskFile, "--", "Please complete this task."]; // Default
 
   if (args["exec"]) {
-    execCmd = (args["exec"] as string).split(" ");
+    execCmd = parseArgsString(args["exec"] as string);
   } else if (args["exec-file"]) {
     // Run a specific file
     // Need to know how to run it. Assume node for .ts/.js, or executable
