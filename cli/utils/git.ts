@@ -21,8 +21,12 @@ export async function add(files: string[], cwd?: string): Promise<void> {
   await git(["add", ...files], cwd);
 }
 
-export async function commit(message: string, cwd?: string): Promise<void> {
-  await git(["commit", "-m", message], cwd);
+export async function commit(message: string, files?: string[], cwd?: string): Promise<void> {
+  const args = ["commit", "-m", message];
+  if (files && files.length > 0) {
+    args.push("--", ...files);
+  }
+  await git(args, cwd);
 }
 
 export async function getCurrentBranch(): Promise<string> {
