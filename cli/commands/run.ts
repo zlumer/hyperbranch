@@ -80,15 +80,6 @@ export async function runCommand(args: Args) {
       console.warn("Warning: Failed to update .gitignore:", e);
     }
 
-    // 3. File Synchronization // -- don't do this
-    // console.log("Synchronizing untracked files...");
-    // await Git.copyUntrackedFiles(worktreePath);
-
-    // if (config.copy.include.length > 0 || config.copy.includeDirs.length > 0) {
-    //   console.log(`Copying ignored files...`);
-    //   await Git.copyIgnoredFiles(worktreePath, config.copy);
-    // }
-
     // 4. Script Generation
     console.log("Generating execution assets...");
     await Docker.prepareWorktreeAssets(worktreePath, runDir, args["dockerfile"] as string);

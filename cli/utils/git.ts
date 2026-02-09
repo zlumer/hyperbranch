@@ -1,9 +1,5 @@
-import { copy } from "@std/fs/copy";
-import { expandGlob } from "@std/fs/expand-glob";
-import { isAbsolute, join } from "@std/path";
 import { loadTask } from "./loadTask.ts";
 import { getRunBranchName, getRunBranchPrefix, getTaskBranchName, parseRunNumber } from "./branch-naming.ts";
-import { GIT_WORKTREES_PATH, GIT_LEGACY_WORKTREES_PATH } from "./paths.ts";
 
 // Helper to run git command
 export async function git(args: string[], cwd?: string): Promise<string> {
@@ -174,85 +170,5 @@ export async function status(worktreePath: string): Promise<boolean> {
     // Or maybe it's not a valid worktree.
     // Let's assume dirty to be safe unless we are sure.
     return true;
-  }
-}
-
-export async function copyUntrackedFiles(dest: string): Promise<void> {
-  // ls-files --others --exclude-standard gives relative paths
-  const output = await git(["ls-files", "--others", "--exclude-standard"]);
-  if (!output) return;
-
-  const files = output.split("\n").filter(Boolean);
-  const cwd = Deno.cwd();
-
-  for (const file of files) {
-    if (file.startsWith(GIT_WORKTREES_PATH) || file.startsWith(GIT_LEGACY_WORKTREES_PATH)) {
-      continue;
-    }
-
-    const srcPath = join(cwd, file);
-    const destPath = join(dest, file);
-    await copy(srcPath, destPath, {
-      overwrite: true,
-      preserveTimestamps: true,
-    });
-  }
-}
-
-import { CopyConfig } from "./config.ts";
-import { dirname } from "@std/path";
-import { exists } from "@std/fs/exists";
-
-export async function copyIgnoredFiles(
-  dest: string,
-  config: CopyConfig,
-): Promise<void> {
-  const cwd = Deno.cwd();
-
-  // 1. Handle Files (include patterns)
-  for (const pattern of config.include) {
-    for await (
-      const file of expandGlob(pattern, {
-        root: cwd,
-        exclude: config.exclude,
-        globstar: true,
-      })
-    ) {
-      if (file.isFile) {
-        const relPath = file.path.substring(cwd.length + 1);
-        const destPath = join(dest, relPath);
-        await Deno.mkdir(dirname(destPath), { recursive: true });
-        await copy(file.path, destPath, {
-          overwrite: true,
-          preserveTimestamps: true,
-        });
-      }
-    }
-  }
-
-  // 2. Handle Directories (includeDirs)
-  // Recursive copy, respecting excludeDirs
-  for (const dir of config.includeDirs) {
-    const srcDir = join(cwd, dir);
-    if (!(await exists(srcDir))) continue;
-
-    // Re-implementation using single expandGlob for the directory
-    for await (
-      const entry of expandGlob(`${dir}/**/*`, {
-        root: cwd,
-        exclude: config.excludeDirs,
-        globstar: true,
-      })
-    ) {
-      if (entry.isFile) {
-        const relPath = entry.path.substring(cwd.length + 1);
-        const destPath = join(dest, relPath);
-        await Deno.mkdir(dirname(destPath), { recursive: true });
-        await copy(entry.path, destPath, {
-          overwrite: true,
-          preserveTimestamps: true,
-        });
-      }
-    }
   }
 }

@@ -2,18 +2,19 @@
 
 ## Overview
 
-The `run` command executes a Hyperbranch task within an isolated, reproducible environment. It orchestrates Git worktrees to preserve the user's exact state (including untracked and ignored files), manages the execution environment (Docker), and handles logging and cleanup.
+The `run` command executes a Hyperbranch task within an isolated, reproducible environment. It orchestrates Git worktrees to preserve the user's exact state, manages the execution environment (Docker), and handles logging and cleanup.
 
 **Key Change:** As of the latest version, `hb run` executes in **Detached Mode**. The CLI command initiates the container and exits immediately, leaving the task running in the background. This enables parallel execution of multiple tasks.
 
 ## Goals
 
 1.  **Isolation**: Runs do not interfere with the user's current working directory.
-2.  **State Preservation**: The agent runs against a fresh worktree based on the committed state of the base branch. Untracked files and ignored files (if configured) are synchronized, but uncommitted modifications to tracked files are **ignored** to avoid conflicts.
-3.  **Safety**: The command aborts if worktree creation fails.
+2.  **State Preservation**: The agent runs against a fresh worktree based on the committed state of the base branch. Uncommitted modifications to tracked files in the original workspace are **ignored**.
+3.  **Safety**: The command aborts if worktree creation fails or if the task file is missing in the base branch.
 4.  **Parallelism**: Support running multiple tasks simultaneously without console interleaving.
 5.  **Observability**: Logs are persisted to files and viewed via `hb logs`.
 6.  **Control**: Tasks can be listed (`hb ps`) and terminated (`hb stop`).
+7.  **Auto-Commit**: Upon successful completion, the agent's work is automatically committed to the run branch.
 
 ## Architecture
 
@@ -24,17 +25,18 @@ The implementation uses a modular structure:
 *   **`cli/commands/stop.ts`**: Task terminator.
 *   **`cli/commands/ps.ts`**: Status monitor.
 *   **`cli/utils/docker.ts`**: Docker execution (supports detached `nohup` execution).
+*   **`cli/utils/paths.ts`**: Centralized path management (e.g., `getRunDir`).
 
 ## Commands
 
 ### `hb run <task-id>`
-*   Prepares worktree and assets.
+*   Prepares worktree and assets in `.hyperbranch/.current-run/`.
 *   Launches Docker container in background.
 *   Prints Task ID and Container ID (CID) then exits.
 
 ### `hb logs <task-id> <run-index>`
 *   Finds the worktree for the specified task and run index.
-*   Streams `stdout.log` using `tail -f`.
+*   Streams `.hyperbranch/.current-run/docker.log` using `tail -f`.
 
 ### `hb stop <task-id>`
 *   Finds the running container for the task.
@@ -54,51 +56,35 @@ Load configuration to determine ignored files to copy and env vars to forward.
 *   **Format**: TOML.
 *   **Schema**:
     ```toml
-    [copy]
-    include = ["**/.env*"]        # Glob patterns for ignored files to copy
-    exclude = ["**/.env.local"]   # Glob patterns to exclude from 'include'
-    includeDirs = ["node_modules"] # Directories to copy recursively (from host root)
-    excludeDirs = ["node_modules/.cache"] # Glob patterns to exclude during directory copy
-
-    env_vars = ["OPENAI_API_KEY", "GITHUB_TOKEN"] # Env vars to forward
+    [env]
+    vars = ["OPENAI_API_KEY", "GITHUB_TOKEN"] # Env vars to forward
     ```
 
 ### 2. Argument Parsing
 
 *   `task-id` (Required).
 *   `--image`, `--dockerfile` (Container customization).
-*   `--exec`, `--exec-file`, `--docker-args`, `--docker-run-file`.
+*   `--exec`, `--exec-file`, `--docker-args`.
 
 ### 3. Git Worktree Preparation (`cli/utils/git.ts`)
 
 1.  **Resolve Base Branch**:
     *   Get Task Parent ID.
     *   Exists? -> `task/<parent-id>`.
-    *   Null? -> Default branch (`main` or `master`).
-2.  **Resolve Run Branch**:
+    *   Null? -> Current Branch -> `main` -> `master`.
+2.  **Validate Task**:
+    *   Check if `task-<id>.md` exists in the base branch. Fail if missing.
+3.  **Resolve Run Branch**:
     *   Pattern: `task/<id>/<run-idx>`.
     *   Scan existing branches to find the next sequential index (e.g., `.../run-1`, `.../run-2`).
-3.  **Create Worktree**:
+4.  **Create Worktree**:
     *   Command: `git worktree add -b <run-branch> <worktree-path> <base-branch>`.
-    *   Path: `.hyperbranch/worktrees/<run-branch>`.
+    *   Path: `.hyperbranch/.worktrees/<run-branch-flattened>`.
+5.  **Setup Artifacts**:
+    *   Directory: `.hyperbranch/.current-run/`.
+    *   Add `.hyperbranch/.current-run/` to `.gitignore` in the worktree.
 
-### 4. File Synchronization
-
-Ensure the worktree matches the host state fully.
-
-1.  **Untracked Files**:
-    *   `git ls-files --others --exclude-standard`.
-    *   Copy identified files to worktree.
-2.  **Ignored Files**:
-    *   Process `config.copy.include` patterns using host root context.
-    *   Filter matches against `config.copy.exclude`.
-    *   Copy matching files to worktree, preserving directory structure.
-3.  **Ignored Directories**:
-    *   Iterate `config.copy.includeDirs`.
-    *   Recursively copy contents to worktree.
-    *   Skip files/subdirectories matching `config.copy.excludeDirs`.
-
-### 5. Environment Preparation (`cli/utils/system.ts`)
+### 4. Environment Preparation (`cli/utils/system.ts`)
 
 1.  **Caches**: Detect usage (lockfiles) and mount:
     *   `npm`: `npm config get cache`.
@@ -108,43 +94,27 @@ Ensure the worktree matches the host state fully.
 3.  **Env Vars**: Collect values for keys listed in `config.env_vars`.
 4.  **User Mapping**: UID/GID mapping to prevent permission issues.
 
-### 6. Execution & Logging (`cli/utils/docker.ts`)
+### 5. Execution & Logging (`cli/utils/docker.ts`, `run.sh`)
 
-1.  **Detached Execution**:
+1.  **Assets**: Copy `run.sh` and `Dockerfile` to `.hyperbranch/.current-run/`.
+2.  **Detached Execution**:
     *   Executes `run.sh` in the background using `nohup`.
-    *   Deno process waits *only* for confirmation of container start (CID file), then exits.
-2.  **Log Setup**:
-    *   Shell redirection pipes `stdout` -> `stdout.log` and `stderr` -> `stderr.log` within the worktree.
-    *   No logs are streamed to the CLI console (use `hb logs`).
+    *   Deno process waits *only* for confirmation of container start (`hb.cid` file), then exits.
+3.  **Log Setup**:
+    *   `run.sh` spawns `docker logs -f <cid> > .hyperbranch/.current-run/docker.log &`.
+    *   `nohup` redirects script output to `stdout.log` / `stderr.log` (mostly debug info).
+4.  **Auto-Commit**:
+    *   `run.sh` waits for container exit.
+    *   If exit code 0: `git add .` && `git commit -m "feat: complete task <id>"`.
 
-### 7. Cleanup
+### 6. Cleanup (`hb rm`)
 
-*   Remove container (`--rm` handled by Docker, or manual removal on stop).
-*   Worktree remains for inspection.
+*   `hb rm --sweep` cleans up merged branches and dangling worktrees.
+*   Safe by default: checks for unmerged commits and dirty status.
+*   Force (`-f`) overrides safety checks.
 
 ## Error Handling & Logging Strategy
 
 *   **Startup Failures**: Errors during preparation (Git, Config) are printed to Console.
-*   **Runtime Failures**: Once detached, all output goes to `stdout.log` and `stderr.log` in the worktree.
+*   **Runtime Failures**: Once detached, all output goes to log files in `.hyperbranch/.current-run/`.
 *   **Debug**: Use `hb logs` to investigate runtime issues.
-
-## Modules
-
-### `cli/utils/git.ts`
-Updated to support run discovery.
-
-```typescript
-export function getLatestRunBranch(taskId: string): Promise<string | null>;
-```
-
-### `cli/utils/docker.ts`
-Updated to support detached execution.
-
-```typescript
-export function runContainer(
-  config: DockerConfig, 
-  logDir: string, 
-  onStart: (id: string) => void
-): Promise<void>; 
-// Returns after container ID is detected, does not wait for exit.
-```

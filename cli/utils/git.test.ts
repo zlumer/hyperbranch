@@ -1,6 +1,5 @@
-import { assertEquals, assertRejects } from "@std/assert"
-import { stub, Spy, assertSpyCalls } from "@std/testing/mock"
-import { join } from "@std/path"
+import { assertEquals } from "@std/assert"
+import { stub } from "@std/testing/mock"
 import * as Git from "./git.ts"
 import { getRunBranchName, getRunBranchPrefix } from "./branch-naming.ts"
 
@@ -79,53 +78,5 @@ Deno.test("getNextRunBranch - starts at 1", async () => {
 		assertEquals(branch, getRunBranchName("456", 1));
 	} finally {
 		commandStub.restore();
-	}
-});
-
-Deno.test("copyIgnoredFiles - respects excludes", async () => {
-	const tempDir = await Deno.makeTempDir();
-	const srcDir = await Deno.makeTempDir();
-	const originalCwd = Deno.cwd();
-
-	try {
-		Deno.chdir(srcDir);
-		
-		// Create file structure
-		await Deno.mkdir(".env-files");
-		await Deno.writeTextFile(".env-files/.env.prod", "SECRET=PROD");
-		await Deno.writeTextFile(".env-files/.env.local", "SECRET=LOCAL"); // Should be excluded
-		
-		await Deno.mkdir("node_modules");
-		await Deno.writeTextFile("node_modules/pkg.json", "{}");
-		await Deno.mkdir("node_modules/.cache");
-		await Deno.writeTextFile("node_modules/.cache/cache.txt", "garbage"); // Should be excluded
-
-		const config = {
-			include: [".env-files/*"],
-			exclude: [".env-files/.env.local"],
-			includeDirs: ["node_modules"],
-			excludeDirs: ["node_modules/.cache"]
-		};
-
-		await Git.copyIgnoredFiles(tempDir, config);
-
-		// Verify .env files
-		const copiedEnvProd = await Deno.stat(join(tempDir, ".env-files/.env.prod")).then(() => true).catch(() => false);
-		const copiedEnvLocal = await Deno.stat(join(tempDir, ".env-files/.env.local")).then(() => true).catch(() => false);
-		
-		assertEquals(copiedEnvProd, true, ".env.prod should be copied");
-		assertEquals(copiedEnvLocal, false, ".env.local should be excluded");
-
-		// Verify node_modules
-		const copiedPkg = await Deno.stat(join(tempDir, "node_modules/pkg.json")).then(() => true).catch(() => false);
-		const copiedCache = await Deno.stat(join(tempDir, "node_modules/.cache/cache.txt")).then(() => true).catch(() => false);
-		
-		assertEquals(copiedPkg, true, "node_modules/pkg.json should be copied");
-		assertEquals(copiedCache, false, "node_modules/.cache should be excluded");
-
-	} finally {
-		Deno.chdir(originalCwd);
-		await Deno.remove(tempDir, { recursive: true });
-		await Deno.remove(srcDir, { recursive: true });
 	}
 });
