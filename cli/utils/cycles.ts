@@ -11,19 +11,25 @@ function getDependencies(task: TaskFile): string[] {
 	return task.frontmatter.dependencies || []
 }
 
+function addCache<K, V>(fn: (key: K) => Promise<V>): (key: K) => Promise<V> {
+	const cache = new Map<K, V>()
+	return async (key: K) => {
+		if (cache.has(key))
+			return cache.get(key)!
+
+		const value = await fn(key)
+		cache.set(key, value)
+		return value
+	}
+}
+
 async function checkCycle(
 	sourceId: string, 
 	targetId: string, 
 	errorMsg: (source: string, target: string) => string,
 	loadTask: LoadTaskFn = defaultLoadTask
 ) {
-	const cache = new Map<string, TaskFile>()
-	async function getTask(id: string) {
-		if (cache.has(id)) return cache.get(id)!
-		const task = await loadTask(id)
-		cache.set(id, task)
-		return task
-	}
+	const getTask = addCache(loadTask)
 
 	// 1. Identify all ancestors of sourceId
 	// These are the nodes that, if reached from targetId, constitute a cycle.
