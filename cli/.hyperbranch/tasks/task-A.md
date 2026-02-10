@@ -1,7 +1,8 @@
 ---
-id: "A"
+id: A
 status: todo
 parent: null
-dependencies: ["B"]
+dependencies:
+  - B
 ---
 Body
