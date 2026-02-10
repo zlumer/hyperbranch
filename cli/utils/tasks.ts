@@ -20,3 +20,26 @@ export function getTaskPath(id: string): string
 {
 	return join(TASKS_DIR(), `task-${id}.md`)
 }
+
+export async function scanTasks(): Promise<string[]> {
+	const tasksDir = TASKS_DIR()
+	const taskIds: string[] = []
+
+	try {
+		for await (const entry of Deno.readDir(tasksDir)) {
+			if (entry.isFile && entry.name.startsWith("task-") && entry.name.endsWith(".md")) {
+				// Extract ID: task-<id>.md
+				const id = entry.name.slice(5, -3)
+				if (id) {
+					taskIds.push(id)
+				}
+			}
+		}
+	} catch (e) {
+		if (!(e instanceof Deno.errors.NotFound)) {
+			throw e
+		}
+	}
+
+	return taskIds
+}

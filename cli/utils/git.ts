@@ -3,6 +3,12 @@ import { getRunBranchName, getRunBranchPrefix, getTaskBranchName, parseRunNumber
 
 // Helper to run git command
 export async function git(args: string[], cwd?: string): Promise<string> {
+  if (Deno.env.get("HB_MOCK_GIT") === "true") {
+      // Return dummy output for common commands if needed
+      if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") return "main";
+      if (args[0] === "branch" && args[1] === "--list") return "";
+      return "";
+  }
   const command = new Deno.Command("git", {
     args,
     cwd: cwd || Deno.cwd(),
@@ -67,11 +73,8 @@ export async function resolveBaseBranch(taskId: string): Promise<string> {
     if (task.frontmatter.parent) {
       const parentBranch = getTaskBranchName(task.frontmatter.parent);
       // Check if branch exists
-      try {
-        await git(["rev-parse", "--verify", parentBranch]);
+      if (await branchExists(parentBranch)) {
         return parentBranch;
-      } catch {
-        // Parent branch doesn't exist, fall back to default
       }
     }
   } catch {
@@ -82,18 +85,17 @@ export async function resolveBaseBranch(taskId: string): Promise<string> {
   try {
     const current = await getCurrentBranch();
     // Verify it exists (it should since we're on it, but safe practice)
-    await git(["rev-parse", "--verify", current]);
-    return current;
+    if (await branchExists(current)) {
+      return current;
+    }
   } catch {
     // Detached HEAD or error
   }
 
-  try {
-    await git(["rev-parse", "--verify", "main"]);
+  if (await branchExists("main")) {
     return "main";
-  } catch {
-    return "master";
   }
+  return "master";
 }
 
 export async function getNextRunBranch(taskId: string): Promise<string> {

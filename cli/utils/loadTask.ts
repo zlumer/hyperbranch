@@ -9,8 +9,7 @@ export async function loadTask(id: string): Promise<TaskFile>
 	const path = getTaskPath(id)
 	if (!(await exists(path)))
 	{
-		console.error(`Error: Task ${id} not found at ${path}`)
-		Deno.exit(1)
+		throw new Error(`Task ${id} not found at ${path}`)
 	}
 
 	const content = await Deno.readTextFile(path)
@@ -32,8 +31,7 @@ export async function loadTask(id: string): Promise<TaskFile>
 		return { id, path, frontmatter, body }
 	} catch (e)
 	{
-		console.error(`Error parsing YAML for task ${id}: ${e}`)
-		Deno.exit(1)
+		throw new Error(`Error parsing YAML for task ${id}: ${e}`)
 	}
 }
 

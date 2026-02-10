@@ -96,3 +96,20 @@ export function setupSignalHandler(containerId: string): void {
   };
   Deno.addSignalListener("SIGINT", handler);
 }
+
+export async function getUserId(): Promise<string> {
+  if (Deno.build.os === "linux") {
+    try {
+      const uidProcess = new Deno.Command("id", { args: ["-u"] });
+      const gidProcess = new Deno.Command("id", { args: ["-g"] });
+      const uid = new TextDecoder().decode((await uidProcess.output()).stdout)
+        .trim();
+      const gid = new TextDecoder().decode((await gidProcess.output()).stdout)
+        .trim();
+      return `${uid}:${gid}`;
+    } catch {
+      console.warn("Failed to detect UID/GID, defaulting to 'node' user.");
+    }
+  }
+  return "node";
+}

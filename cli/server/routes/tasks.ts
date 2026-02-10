@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
+import { exists } from "@std/fs/exists";
 import * as Tasks from "../../services/tasks.ts";
 import * as Runs from "../../services/runs.ts";
 
@@ -80,6 +81,12 @@ app.get("/:id/logs", upgradeWebSocket((c) => {
         // Get logs path (this might throw if task/run doesn't exist)
         // We do this inside onOpen so we can send error over WS if needed
         const logPath = await Runs.getLogsPath(id);
+
+        if (!(await exists(logPath))) {
+          ws.send(JSON.stringify({ error: `Log file not found: ${logPath}` }));
+          ws.close();
+          return;
+        }
 
         const cmd = new Deno.Command("tail", {
           args: ["-f", "-n", "+1", logPath],
