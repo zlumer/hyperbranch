@@ -1,7 +1,7 @@
 {
   "tasks": {
     "test": "deno test -A",
-    "serve": "deno run -A cli/server/main.ts"
+    "serve": "deno serve -A server/main.ts"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.18",
