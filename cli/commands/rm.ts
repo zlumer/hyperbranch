@@ -93,8 +93,7 @@ async function sweep(force: boolean) {
     const branchExists = await Git.branchExists(runBranch);
 
     if (!branchExists) {
-      // Dangling worktree -> Safe
-      safeToRemove = true;
+      // Dangling worktree -> Unsafe (require force)
     } else {
        // 4. Check Merged Status
        const baseBranch = await Git.resolveBaseBranch(taskId);
@@ -105,7 +104,10 @@ async function sweep(force: boolean) {
     }
 
     if (!safeToRemove && !force) {
-      console.log(`Skipping ${entry.name}: Branch ${runBranch} is not merged (use -f to override).`);
+      const reason = !branchExists 
+        ? `Branch ${runBranch} not found (dangling worktree)`
+        : `Branch ${runBranch} is not merged`;
+      console.log(`Skipping ${entry.name}: ${reason} (use -f to override).`);
       continue;
     }
 

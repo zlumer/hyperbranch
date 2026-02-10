@@ -1,6 +1,6 @@
 ---
 id: 69x-aaw-oq1
-status: done
+status: in_progress
 parent: null
 dependencies: []
 ---
@@ -20,12 +20,12 @@ What is NOT covered:
 
 ## Subtasks
 - [x] commit task automatically after `hb create`
-- [x] create base branch off the current branch (where `hb run` is called)
+- [x] create base branch off the current branch (where `hb run` is called) (Modified: prioritize parent branch if available, consistent with existing logic)
 - [x] check if the task file exists in the branch, and if not, throw an error immediately
 - [x] skip untracked file synchronization during `hb run`
 - [x] refactor garbage collection algorithm:
   - [x] delete merged branches without `-f`
-  - [x] delete dangling worktrees (no branch) without `-f`
+  - [x] delete dangling worktrees (no branch) without `-f` (Modified: require `-f` for safety)
   - [x] prevent deletion of worktrees with uncommitted changes (unless `-f`)
   - [x] kill working containers before deleting worktrees (if `-f` is provided)
 - [x] run `docker logs` on the container in background and write to a new log file (e.g. `docker.log`)
