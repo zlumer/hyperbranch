@@ -3,9 +3,9 @@ import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
+import * as Tasks from "../services/tasks.ts";
 import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
 import { getRunBranchName, getRunBranchPrefix } from "../utils/branch-naming.ts";
-import { getTaskPath } from "../utils/tasks.ts";
 
 export async function rmCommand(args: Args) {
   const targets = args._.slice(1).map(String);
@@ -318,13 +318,9 @@ async function removeTask(taskId: string, force: boolean) {
   }
 
   // Remove Task File
-  const taskPath = getTaskPath(taskId);
-  if (await exists(taskPath)) {
-    await Deno.remove(taskPath);
-    console.log(`Removed task file: ${taskPath}`);
-  } else {
-    console.warn(`Task file not found: ${taskPath}`);
-  }
+  // REPLACED: Use Tasks.remove(id)
+  await Tasks.remove(taskId);
+  console.log(`Removed task: ${taskId}`);
 
   // Remove Docker Image
   const imageTag = `hyperbranch-run:${taskId}`;

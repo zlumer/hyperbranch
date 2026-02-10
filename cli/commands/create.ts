@@ -1,8 +1,5 @@
 import { parseArgs } from "@std/cli/parse-args"
-import { TaskFile } from "../types.ts"
-import { checkTaskExists, saveTask } from "../utils/loadTask.ts"
-import { generateTaskId, getTaskPath } from "../utils/tasks.ts"
-import { add, commit } from "../utils/git.ts"
+import * as Tasks from "../services/tasks.ts"
 
 // --- Commands ---
 export async function createCommand(args: ReturnType<typeof parseArgs>)
@@ -21,45 +18,25 @@ export async function createCommand(args: ReturnType<typeof parseArgs>)
 	}
 	const title = titleParts.join(" ")
 
-	if (parentId)
-	{
-		if (!(await checkTaskExists(parentId)))
+	try {
+		const task = await Tasks.create(title, parentId)
+
+		console.log(`Task created: ${task.id}`)
+		console.log(`Path: ${task.path}`)
+
+		if (edit)
 		{
-			console.error(`Error: Parent task ${parentId} does not exist.`)
-			Deno.exit(1)
+			const editor = Deno.env.get("EDITOR") || "vim"
+			const p = new Deno.Command(editor, {
+				args: [task.path],
+				stdin: "inherit",
+				stdout: "inherit",
+				stderr: "inherit",
+			})
+			await p.output()
 		}
+	} catch (error) {
+		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+		Deno.exit(1)
 	}
-
-	const id = generateTaskId()
-	const task: TaskFile = {
-		id,
-		path: getTaskPath(id),
-		frontmatter: {
-			id,
-			status: "todo",
-			parent: parentId || null,
-			dependencies: []
-		},
-		body: `# ${title}\n\n`
-	}
-
-	await saveTask(task)
-
-	console.log(`Task created: ${id}`)
-	console.log(`Path: ${task.path}`)
-
-	if (edit)
-	{
-		const editor = Deno.env.get("EDITOR") || "vim"
-		const p = new Deno.Command(editor, {
-			args: [task.path],
-			stdin: "inherit",
-			stdout: "inherit",
-			stderr: "inherit",
-		})
-		await p.output()
-	}
-
-	await add([task.path])
-	await commit(`chore: create task ${id}`, [task.path])
 }

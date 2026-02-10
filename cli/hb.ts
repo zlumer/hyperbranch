@@ -10,6 +10,7 @@ import { logsCommand } from "./commands/logs.ts"
 import { stopCommand } from "./commands/stop.ts"
 import { psCommand } from "./commands/ps.ts"
 import { rmCommand } from "./commands/rm.ts"
+import { serverCommand } from "./commands/server.ts"
 
 // --- File I/O ---
 
@@ -57,6 +58,9 @@ async function main()
 		case "rm":
 			await rmCommand(args)
 			break
+		case "server":
+			await serverCommand(args)
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
@@ -68,6 +72,7 @@ async function main()
 			console.log("  stop <task-id>")
 			console.log("  rm <task-id>/<run-id>... | <task-id>... | --sweep")
 			console.log("  ps")
+			console.log("  server [--port <port>]")
 			break
 	}
 }
