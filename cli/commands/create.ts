@@ -45,9 +45,6 @@ export async function createCommand(args: ReturnType<typeof parseArgs>)
 
 	await saveTask(task)
 
-	await add([task.path])
-	await commit(`chore: create task ${id}`, [task.path])
-
 	console.log(`Task created: ${id}`)
 	console.log(`Path: ${task.path}`)
 
@@ -62,4 +59,7 @@ export async function createCommand(args: ReturnType<typeof parseArgs>)
 		})
 		await p.output()
 	}
+
+	await add([task.path])
+	await commit(`chore: create task ${id}`, [task.path])
 }

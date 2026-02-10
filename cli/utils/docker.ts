@@ -66,7 +66,6 @@ export async function buildImage(
 
 export async function runContainer(
   config: DockerConfig,
-  _logDir: string,
   onStart: (id: string) => void,
 ): Promise<void> {
   // Prepare log files

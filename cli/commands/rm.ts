@@ -59,7 +59,28 @@ async function sweep(force: boolean) {
     const worktreePath = join(worktreesDir, entry.name);
     const runBranch = getRunBranchName(taskId, runIndex);
 
-    // 1. Check Dirty Status
+    // Get CID
+    const cidFile = join(getRunDir(worktreePath), "hb.cid");
+    let cid: string | undefined;
+    if (await exists(cidFile)) {
+      try {
+        const content = (await Deno.readTextFile(cidFile)).trim();
+        if (content) cid = content;
+      } catch {}
+    }
+
+    // 1. Check Running Container
+    if (cid) {
+      try {
+        const { status } = await Docker.getContainerStatus(cid);
+        if (status.toLowerCase() === "running" && !force) {
+          console.log(`Skipping ${entry.name}: Container is running (use -f to override).`);
+          continue;
+        }
+      } catch {}
+    }
+
+    // 2. Check Dirty Status
     // If dirty, skip unless -f (force)
     const isDirty = await Git.status(worktreePath);
     if (isDirty && !force) {
@@ -67,7 +88,7 @@ async function sweep(force: boolean) {
       continue;
     }
 
-    // 2. Check Missing/Merged Branch
+    // 3. Check Missing/Merged Branch
     let safeToRemove = false;
     const branchExists = await Git.branchExists(runBranch);
 
@@ -75,7 +96,7 @@ async function sweep(force: boolean) {
       // Dangling worktree -> Safe
       safeToRemove = true;
     } else {
-       // 3. Check Merged Status
+       // 4. Check Merged Status
        const baseBranch = await Git.resolveBaseBranch(taskId);
        const isMerged = await Git.isBranchMerged(runBranch, baseBranch);
        if (isMerged) {
@@ -92,13 +113,9 @@ async function sweep(force: boolean) {
     console.log(`Removing ${entry.name}...`);
 
     // Remove Container
-    const cidFile = join(getRunDir(worktreePath), "hb.cid");
-    if (await exists(cidFile)) {
+    if (cid) {
       try {
-        const cid = (await Deno.readTextFile(cidFile)).trim();
-        if (cid) {
-           await Docker.removeContainer(cid, true);
-        }
+         await Docker.removeContainer(cid, true);
       } catch (e) {
          // Ignore container removal errors
       }

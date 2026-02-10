@@ -171,7 +171,7 @@ export async function runCommand(args: Args) {
   console.log(`\n🚀 Launching container in ${worktreePath}...\n`);
 
   try {
-    await Docker.runContainer(dockerConfig, worktreePath, (cid) => {
+    await Docker.runContainer(dockerConfig, (cid) => {
       // Detached mode: Container ID is received when confirmed running
       console.log(`Container started with ID: ${cid}`);
     });
