@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-run --allow-env
+#!/usr/bin/env -S deno run -A
 import { parseArgs } from "@std/cli/parse-args"
 import { ensureDir } from "@std/fs"
 import { TASKS_DIR } from "./utils/paths.ts"
