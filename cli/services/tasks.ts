@@ -31,18 +31,6 @@ export async function create(title: string, parentId?: string): Promise<TaskFile
   }
 
   await saveTask(task)
-  
-  try {
-    await add([task.path])
-    await commit(`chore: create task ${id}`, [task.path])
-  } catch (error) {
-    // If git fails, we might want to clean up the file or just warn.
-    // For now, we'll let the error propagate but the file is created.
-    // Or maybe we should delete the file?
-    // Let's propagate as it's a "service" and caller should handle.
-    console.error("Failed to commit task creation:", error)
-    throw error
-  }
 
   return task
 }
