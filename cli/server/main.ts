@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { authMiddleware } from "./middleware/auth.ts";
-import { responseMiddleware } from "./middleware/response.ts";
 import { errorHandler } from "./middleware/errorHandler.ts";
 import { corsMiddleware } from "./middleware/cors.ts";
 import tasksRoutes from "./routes/tasks.ts";
@@ -21,13 +20,12 @@ const app = new Hono();
 
 // Global Middleware
 app.use("*", corsMiddleware);
-app.use("*", responseMiddleware);
 app.use("*", authMiddleware);
 
 // Error Handling
 app.onError(errorHandler);
 app.notFound((c) => {
-  return c.json({ success: false, data: null, error: "Not Found" }, 404);
+  return c.json({ error: "Not Found" }, 404);
 });
 
 // Routes

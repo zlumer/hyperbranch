@@ -21,8 +21,6 @@ export const errorHandler: ErrorHandler = (err, c) => {
 
   return c.json(
     {
-      success: false,
-      data: null,
       error: message,
     },
     status

@@ -50,7 +50,7 @@ app.patch("/:id", async (c) => {
 app.delete("/:id", async (c) => {
   const id = c.req.param("id")
   await Tasks.remove(id)
-  return c.json(null); // success wrapper will make it { success: true, data: null }
+  return c.json(null);
 })
 
 // Run task
