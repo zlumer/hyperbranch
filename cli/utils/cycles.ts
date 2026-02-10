@@ -1,7 +1,9 @@
-import { loadTask } from "./loadTask.ts"
+import { loadTask as defaultLoadTask } from "./loadTask.ts"
 import { TaskFile } from "../types.ts"
 
 // --- Cycle Detection ---
+
+export type LoadTaskFn = (id: string) => Promise<TaskFile>
 
 // Helper to get dependencies as per spec
 // Only strictly enforce explicit dependencies.
@@ -12,7 +14,8 @@ function getDependencies(task: TaskFile): string[] {
 async function checkCycle(
 	sourceId: string, 
 	targetId: string, 
-	errorMsg: (source: string, target: string) => string
+	errorMsg: (source: string, target: string) => string,
+	loadTask: LoadTaskFn = defaultLoadTask
 ) {
 	const cache = new Map<string, TaskFile>()
 	async function getTask(id: string) {
@@ -67,17 +70,19 @@ async function checkCycle(
 	await visit(targetId)
 }
 
-export async function detectDependencyCycle(taskId: string, newDepId: string) {
+export async function detectDependencyCycle(taskId: string, newDepId: string, loadTask: LoadTaskFn = defaultLoadTask) {
 	// taskId depends on newDepId.
 	// Check if newDepId reaches taskId.
 	await checkCycle(taskId, newDepId, 
-		(src, tgt) => `Error: Circular dependency detected. Task ${src} depends on ${tgt}, but ${tgt} already depends on (or is ancestor of) ${src}.`)
+		(src, tgt) => `Error: Circular dependency detected. Task ${src} depends on ${tgt}, but ${tgt} already depends on (or is ancestor of) ${src}.`,
+		loadTask)
 }
 
-export async function detectParentCycle(childId: string, newParentId: string) {
+export async function detectParentCycle(childId: string, newParentId: string, loadTask: LoadTaskFn = defaultLoadTask) {
 	// childId is child of newParentId.
 	// This implies newParentId depends on childId.
 	// Check if childId reaches newParentId.
 	await checkCycle(newParentId, childId,
-		(parent, child) => `Error: Circular parentage detected. Task ${parent} becomes parent of ${child}, but ${child} is already an ancestor (or dependency) of ${parent}.`)
+		(parent, child) => `Error: Circular parentage detected. Task ${parent} becomes parent of ${child}, but ${child} is already an ancestor (or dependency) of ${parent}.`,
+		loadTask)
 }
