@@ -1,10 +1,11 @@
 import { ErrorHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { StatusCode } from "hono/utils/http-status";
 
 export const errorHandler: ErrorHandler = (err, c) => {
   console.error("Server Error:", err);
 
-  let status = 500;
+  let status: StatusCode = 500;
   let message = "Internal Server Error";
 
   if (err instanceof HTTPException) {
@@ -24,7 +25,6 @@ export const errorHandler: ErrorHandler = (err, c) => {
       data: null,
       error: message,
     },
-    // @ts-ignore: status is compatible with ContentfulStatusCode
     status
   );
 };

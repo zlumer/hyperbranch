@@ -98,9 +98,11 @@ app.get("/:id/logs", upgradeWebSocket((c) => {
 
         // Stream stdout
         (async () => {
+          const stdout = child?.stdout
+          if (!stdout) return
+
           const decoder = new TextDecoder()
-          // @ts-ignore: child.stdout is ReadableStream
-          for await (const chunk of child.stdout) {
+          for await (const chunk of stdout) {
             if (killed) break
             const text = decoder.decode(chunk)
             // Split by newline to send lines
