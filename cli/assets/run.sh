@@ -36,6 +36,11 @@ if [ -n "$HB_NAME" ]; then
     DOCKER_NAME_FLAG="--name $HB_NAME"
 fi
 
+# Parse HB_ARGS (mounts, envs) into positional parameters to handle quotes correctly
+if [ -n "$HB_ARGS" ]; then
+    eval "set -- $HB_ARGS"
+fi
+
 # Run container in detached mode
 docker run \
   --detach \
@@ -45,7 +50,7 @@ docker run \
   --cidfile "$CID_FILE" \
   -w "/app" \
   -u "$HB_USER" \
-  $HB_ARGS \
+  "$@" \
   -v "$(pwd):/app" \
   "$HB_IMAGE" \
   "$@" > /dev/null
