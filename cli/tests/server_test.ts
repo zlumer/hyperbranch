@@ -1,6 +1,4 @@
-
 import { assertEquals, assertExists } from "@std/assert";
-import { join } from "@std/path";
 import app from "../server/main.ts";
 
 // Set up environment for tests
@@ -25,9 +23,7 @@ Deno.test("Server Integration Tests", async (t) => {
             headers: { "X-API-Key": API_KEY },
         });
         assertEquals(res.status, 200);
-        const json = await res.json();
-        assertEquals(json.success, true);
-        const tasks = json.data;
+        const tasks = await res.json();
         assertEquals(Array.isArray(tasks), true);
         assertEquals(tasks.length, 0);
     });
@@ -42,9 +38,7 @@ Deno.test("Server Integration Tests", async (t) => {
             body: JSON.stringify({ title: "Test Task" }),
         });
         assertEquals(res.status, 201);
-        const json = await res.json();
-        assertEquals(json.success, true);
-        const task = json.data;
+        const task = await res.json();
         assertExists(task.id);
         
         createdTaskId = task.id;
@@ -56,8 +50,7 @@ Deno.test("Server Integration Tests", async (t) => {
             headers: { "X-API-Key": API_KEY },
         });
         assertEquals(res.status, 200);
-        const json = await res.json();
-        const tasks = json.data;
+        const tasks = await res.json();
         assertEquals(tasks.length, 1);
         assertEquals(tasks[0].id, createdTaskId);
     });
@@ -67,8 +60,7 @@ Deno.test("Server Integration Tests", async (t) => {
             headers: { "X-API-Key": API_KEY },
         });
         assertEquals(res.status, 200);
-        const json = await res.json();
-        const task = json.data;
+        const task = await res.json();
         assertEquals(task.id, createdTaskId);
     });
 
@@ -82,8 +74,7 @@ Deno.test("Server Integration Tests", async (t) => {
             body: JSON.stringify({}),
         });
         assertEquals(res.status, 200);
-        const json = await res.json();
-        const result = json.data;
+        const result = await res.json();
         // Since we mocked runs.ts, we expect specific mock data
         assertEquals(result.runId, `run/${createdTaskId}/mock`);
         assertEquals(result.containerId, "mock-container-id");
@@ -96,7 +87,7 @@ Deno.test("Server Integration Tests", async (t) => {
         });
         assertEquals(res.status, 200);
         const json = await res.json();
-        assertEquals(json.data.message, "Task stopped");
+        assertEquals(json.message, "Task stopped");
     });
     
     // Cleanup
