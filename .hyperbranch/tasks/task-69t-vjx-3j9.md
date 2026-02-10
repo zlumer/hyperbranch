@@ -59,9 +59,10 @@ We start with just the minimum:
 
 1. Task ID (generated)
 
-2. Status (default is `todo`, other possible are `in_progress|review|done|cancelled`)
+2. Status (default is `todo`, other possible are `plan|build|review|done|cancelled`)
 - `todo` -- manual user status where no automation occurs
-- `in_progress` -- that the agents are currently working on this task (or should work but are not yet working due to queue/limits/dependencies)
+- `plan` -- agents are reading the codebase and creating a plan (spec)
+- `build` -- agents are writing code and implementing the plan
 - `review` -- waiting for the user to either accept or reject the work
 - `done` -- work accepted and branch merged
 - `cancelled` -- work not accepted, branch not merged or merged partially, this task is considered cancelled for the purposes of agents learning

@@ -8,7 +8,7 @@ export async function moveCommand(args: ReturnType<typeof parseArgs>)
 	const target = args._[2] as string
 	const fromStatus = args["from-status"] as string | undefined
 
-	const VALID_STATUSES = ["todo", "in_progress", "review", "done", "cancelled"]
+	const VALID_STATUSES = ["todo", "plan", "build", "review", "done", "cancelled"]
 
 	if (!taskId || !target)
 	{

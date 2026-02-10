@@ -70,7 +70,7 @@
 **Usage:** `./hb.ts move <task-id> <new-status> [options]`
 *   **Arguments:**
     *   `task-id`: Target task.
-    *   `new-status`: One of `todo`, `in_progress`, `review`, `done`, `cancelled`.
+    *   `new-status`: One of `todo`, `plan`, `build`, `review`, `done`, `cancelled`.
 *   **Options:**
     *   `--from-status <old-status>`: (Optional) Optimistic locking guard.
 *   **Logic:**

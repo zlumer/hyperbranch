@@ -18,7 +18,7 @@ dependencies: []
 ### **2. Data Model & Hierarchy**
 The application follows this hierarchy:
 1.  **Board:** The high-level view of all work.
-    *   **Columns:** Mapped to `TaskStatus` (`todo`, `in_progress`, `review`, `done`, `cancelled`).
+    *   **Columns:** Mapped to `TaskStatus` (`todo`, `plan`, `build`, `review`, `done`, `cancelled`).
     *   **Cards:** Represent **Tasks**.
 2.  **Task:** A unit of work defined by a Markdown file.
     *   **Properties:** Title, Status, Parent/Dependencies.

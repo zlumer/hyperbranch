@@ -1,5 +1,5 @@
 // --- Types ---
-export type TaskStatus = "todo" | "in_progress" | "review" | "done" | "cancelled";
+export type TaskStatus = "todo" | "plan" | "build" | "review" | "done" | "cancelled";
 export interface TaskFrontmatter
 {
 	id: string;
