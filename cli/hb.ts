@@ -66,7 +66,7 @@ async function main()
 			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
 			console.log("  logs <task-id> <run-index>")
 			console.log("  stop <task-id>")
-			console.log("  rm <task-id>/<run-id> | <task-id> | --sweep [--force]")
+			console.log("  rm <task-id>/<run-id>... | <task-id>... | --sweep")
 			console.log("  ps")
 			break
 	}

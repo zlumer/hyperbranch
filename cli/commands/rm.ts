@@ -8,38 +8,61 @@ import { getRunBranchName, getRunBranchPrefix } from "../utils/branch-naming.ts"
 import { getTaskPath } from "../utils/tasks.ts";
 
 export async function rmCommand(args: Args) {
-  const target = args._[1] ? String(args._[1]) : undefined;
+  const targets = args._.slice(1).map(String);
   const force = args.force || args.f || false;
 
   if (args.sweep) {
-    await sweep(force);
+    if (force) {
+      console.warn("Warning: --force is ignored when using --sweep. Use specific targets to force removal.");
+    }
+    await sweep();
     return;
   }
 
-  if (!target) {
-    await listCandidates(args, force);
+  if (targets.length === 0) {
+    await listCandidates(args);
     return;
   }
 
-  // Check for run format <task>/<run>
-  // e.g. "task-1/1" or "abc/1"
-  const runMatch = target.match(/^([a-zA-Z0-9-]+)\/(\d+)$/);
-  if (runMatch) {
-    const taskId = runMatch[1];
-    const runIndex = parseInt(runMatch[2], 10);
-    await removeRun(taskId, runIndex, force);
-    return;
+  let hasError = false;
+
+  for (const target of targets) {
+    try {
+      // Check for run format <task>/<run>
+      // e.g. "task-1/1" or "abc/1"
+      const runMatch = target.match(/^([a-zA-Z0-9-]+)\/(\d+)$/);
+      if (runMatch) {
+        const taskId = runMatch[1];
+        const runIndex = parseInt(runMatch[2], 10);
+        await removeRun(taskId, runIndex, force);
+        continue;
+      }
+
+      // Check for task format <task>
+      const taskMatch = target.match(/^([a-zA-Z0-9-]+)$/);
+      if (taskMatch) {
+        await removeTask(taskMatch[1], force);
+        continue;
+      }
+
+      console.error(`Invalid target format: ${target}`);
+      hasError = true;
+    } catch (e) {
+      if (e instanceof Error) {
+        console.error(e.message);
+      } else {
+        console.error(String(e));
+      }
+      hasError = true;
+    }
   }
 
-  // Check for task format <task>
-  const taskMatch = target.match(/^([a-zA-Z0-9-]+)$/);
-  if (taskMatch) {
-    await removeTask(taskMatch[1], force);
-    return;
+  if (hasError) {
+    Deno.exit(1);
   }
 }
 
-async function sweep(force: boolean) {
+async function sweep() {
   const worktreesDir = WORKTREES_DIR();
   if (!(await exists(worktreesDir))) {
     console.log("No worktrees found.");
@@ -73,18 +96,18 @@ async function sweep(force: boolean) {
     if (cid) {
       try {
         const { status } = await Docker.getContainerStatus(cid);
-        if (status.toLowerCase() === "running" && !force) {
-          console.log(`Skipping ${entry.name}: Container is running (use -f to override).`);
+        if (status.toLowerCase() === "running") {
+          console.log(`Skipping ${entry.name}: Container is running (use 'hb rm ${taskId}/${runIndex} -f' to override).`);
           continue;
         }
       } catch {}
     }
 
     // 2. Check Dirty Status
-    // If dirty, skip unless -f (force)
+    // If dirty, skip
     const isDirty = await Git.status(worktreePath);
-    if (isDirty && !force) {
-      console.log(`Skipping ${entry.name}: Worktree is dirty (use -f to override).`);
+    if (isDirty) {
+      console.log(`Skipping ${entry.name}: Worktree is dirty (use 'hb rm ${taskId}/${runIndex} -f' to override).`);
       continue;
     }
 
@@ -93,7 +116,12 @@ async function sweep(force: boolean) {
     const branchExists = await Git.branchExists(runBranch);
 
     if (!branchExists) {
-      // Dangling worktree -> Unsafe (require force)
+      // Dangling worktree -> Unsafe?
+      // Wait, if branch is missing, it's just a worktree. 
+      // If we don't have force, we should be careful.
+      // But typically a dangling worktree without branch is just garbage.
+      // The original code said: "Dangling worktree -> Unsafe (require force)"
+      // So we should skip it.
     } else {
        // 4. Check Merged Status
        const baseBranch = await Git.resolveBaseBranch(taskId);
@@ -103,11 +131,11 @@ async function sweep(force: boolean) {
        }
     }
 
-    if (!safeToRemove && !force) {
+    if (!safeToRemove) {
       const reason = !branchExists 
         ? `Branch ${runBranch} not found (dangling worktree)`
         : `Branch ${runBranch} is not merged`;
-      console.log(`Skipping ${entry.name}: ${reason} (use -f to override).`);
+      console.log(`Skipping ${entry.name}: ${reason} (use 'hb rm ${taskId}/${runIndex} -f' to override).`);
       continue;
     }
 
@@ -130,6 +158,8 @@ async function sweep(force: boolean) {
       console.warn(`Warning: Failed to remove worktree via git: ${e}`);
       try {
          await Deno.remove(worktreePath, { recursive: true });
+         // Prune worktrees immediately to allow branch deletion
+         await Git.git(["worktree", "prune"]); 
       } catch {}
     }
 
@@ -151,8 +181,7 @@ async function sweep(force: boolean) {
   console.log("Sweep complete.");
 }
 
-async function listCandidates(args: Args, force: boolean) {
-  const target = args._[1] ? String(args._[1]) : undefined;
+async function listCandidates(args: Args) {
   const worktreesDir = WORKTREES_DIR();
   if (!(await exists(worktreesDir))) {
     console.log("No worktrees found.");
@@ -212,7 +241,6 @@ async function listCandidates(args: Args, force: boolean) {
   }
   console.log("\nRun 'hb rm <task>/<run>' to remove specific runs.");
   console.log("Run 'hb rm --sweep' to remove all clean inactive runs.");
-  console.log("Run 'hb rm --sweep --force' to remove all inactive runs (even if dirty).");
 }
 
 async function removeTask(taskId: string, force: boolean) {
@@ -273,7 +301,7 @@ async function removeTask(taskId: string, force: boolean) {
       console.error("Cannot remove task due to unsafe runs:");
       errors.forEach(e => console.error(`- ${e}`));
       console.error("Use --force to override.");
-      Deno.exit(1);
+      throw new Error("Aborted due to unsafe runs");
     }
   }
 
@@ -383,13 +411,15 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
     console.error(`Failed to remove worktree: ${e}`);
     console.log("Attempting to force delete directory...");
     await Deno.remove(worktreePath, { recursive: true });
+    // Prune worktrees immediately to allow branch deletion
+    await Git.git(["worktree", "prune"]);
   }
 
   try {
     await Git.deleteBranch(runBranch, force);
   } catch (e) {
     console.error(`Failed to delete branch ${runBranch}: ${e}`);
-    if (!force) Deno.exit(1);
+    if (!force) throw new Error("Failed to delete branch");
   }
 
   console.log("✅ Run removed.");

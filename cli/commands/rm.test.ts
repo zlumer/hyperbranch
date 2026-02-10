@@ -1,5 +1,4 @@
-
-import { assertEquals, assertRejects } from "@std/assert";
+import { assertEquals, assertRejects, assert } from "@std/assert";
 import { stub, Spy } from "@std/testing/mock";
 import { join } from "@std/path";
 import { ensureDir } from "@std/fs";
@@ -129,7 +128,8 @@ Deno.test("hb rm <task>/<run> - remove clean inactive run", async () => {
 
 Deno.test("hb rm <task>/<run> - fail on dirty run", async () => {
   const env = setupTestEnv();
-  const exitStub = stub(Deno, "exit", () => { throw new Error("EXIT_CALLED"); });
+  const exitStub = stub(Deno, "exit", (code) => { throw new Error(`EXIT_CALLED: ${code}`); });
+  const consoleError = stub(console, "error");
   const gitStub = mockGit({
     "git rev-parse --verify task/123/1": { success: true },
     "git rev-parse --verify main": { success: true },
@@ -142,10 +142,14 @@ Deno.test("hb rm <task>/<run> - fail on dirty run", async () => {
     await ensureDir(runDir);
 
     const args = parseArgs(["rm", "123/1"]);
-    await assertRejects(() => rmCommand(args), Error, "Run has unmerged commits");
+    await assertRejects(() => rmCommand(args), Error, "EXIT_CALLED: 1");
+    
+    const calls = consoleError.calls.map(c => c.args.join(" ")).join("\n");
+    assert(calls.includes("Run has unmerged commits"), "Should log error message");
     
   } finally {
     exitStub.restore();
+    consoleError.restore();
     gitStub.restore();
     env.teardown();
   }
@@ -153,7 +157,8 @@ Deno.test("hb rm <task>/<run> - fail on dirty run", async () => {
 
 Deno.test("hb rm <task>/<run> - fail on active run", async () => {
   const env = setupTestEnv();
-  const exitStub = stub(Deno, "exit", () => { throw new Error("EXIT_CALLED"); });
+  const exitStub = stub(Deno, "exit", (code) => { throw new Error(`EXIT_CALLED: ${code}`); });
+  const consoleError = stub(console, "error");
   // Mocking docker inspection or just the existence of CID file + running status
   // Assuming rmCommand checks hb.cid or docker inspect
   
@@ -182,10 +187,14 @@ Deno.test("hb rm <task>/<run> - fail on active run", async () => {
 
     const args = parseArgs(["rm", "123/1"]);
     // Expect failure due to active run
-    await assertRejects(() => rmCommand(args), Error, "Run is currently active");
+    await assertRejects(() => rmCommand(args), Error, "EXIT_CALLED: 1");
+    
+    const calls = consoleError.calls.map(c => c.args.join(" ")).join("\n");
+    assert(calls.includes("Run is currently active"), "Should log error message");
 
   } finally {
     exitStub.restore();
+    consoleError.restore();
     gitStub.restore();
     env.teardown();
   }
@@ -284,7 +293,7 @@ Deno.test("hb rm <task> - remove task and all runs", async () => {
 
 Deno.test("hb rm <task> - abort on dirty run", async () => {
   const env = setupTestEnv();
-  const exitStub = stub(Deno, "exit", () => { throw new Error("EXIT_CALLED"); });
+  const exitStub = stub(Deno, "exit", (code) => { throw new Error(`EXIT_CALLED: ${code}`); });
   const gitStub = mockGit({
     "git branch --list task/123/*": { success: true, stdout: "task/123/1\ntask/123/2" },
     "git rev-parse --verify main": { success: true },
@@ -302,7 +311,7 @@ Deno.test("hb rm <task> - abort on dirty run", async () => {
     await ensureDir(join(env.worktreesDir, "task-123-2"));
 
     const args = parseArgs(["rm", "123"]);
-    await assertRejects(() => rmCommand(args), Error, "EXIT_CALLED");
+    await assertRejects(() => rmCommand(args), Error, "EXIT_CALLED: 1");
 
     // Verify task file STILL exists
     await Deno.stat(join(env.tasksDir, "task-123.md"));
@@ -435,32 +444,62 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
   }
 });
 
-Deno.test("hb rm --sweep --force - cleans merged runs with force", async () => {
+Deno.test("hb rm --sweep --force - warns and ignores force", async () => {
   const env = setupTestEnv();
-  const run1Dir = join(env.worktreesDir, "task-123-1");
+  const consoleWarn = stub(console, "warn");
+  const run2Dir = join(env.worktreesDir, "task-123-2"); // Dirty run
   
   const gitStub = mockGit({
     "git rev-parse --verify main": { success: true },
     
-    // Run 1: Clean, Merged
-    [`[${run1Dir}] git status --porcelain`]: { success: true, stdout: "" },
-    "git rev-parse --verify task/123/1": { success: true },
-    "git branch --merged main": { success: true, stdout: "  main\n+ task/123/1" },
-    "git rev-parse --verify task/123": { success: false }, // Base
-
-    // Attempt remove WITH force
-    [`git worktree remove ${run1Dir} --force`]: { success: true },
-    "git branch -D task/123/1": { success: true },
+    // Run 2: Dirty (should be skipped even with force)
+    [`[${run2Dir}] git status --porcelain`]: { success: true, stdout: "M dirty.txt" },
     
-    // Worktree prune
     "git worktree prune": { success: true },
   });
 
   try {
-    // 1. Merged Run
-    await ensureDir(run1Dir);
+    // 2. Dirty Run
+    await ensureDir(run2Dir);
 
     const args = parseArgs(["rm", "--sweep", "--force"]);
+    await rmCommand(args);
+
+    // Verify Warning
+    const warns = consoleWarn.calls.map(c => c.args.join(" ")).join("\n");
+    assert(warns.includes("Warning: --force is ignored when using --sweep"), "Should warn user");
+    
+    // Verify run was NOT removed (implicit by mockGit not receiving remove command)
+
+  } finally {
+    consoleWarn.restore();
+    gitStub.restore();
+    env.teardown();
+  }
+});
+
+Deno.test("hb rm multiple targets", async () => {
+  const env = setupTestEnv();
+  const gitStub = mockGit({
+    // Run 1
+    [`git worktree remove ${join(env.worktreesDir, "task-123-1")}`]: { success: true },
+    "git rev-parse --verify task/123/1": { success: true },
+    "git log task/123/1 ^main --oneline": { success: true, stdout: "" },
+    "git branch -d task/123/1": { success: true },
+    "git rev-parse --verify main": { success: true },
+
+    // Run 2
+    [`git worktree remove ${join(env.worktreesDir, "task-123-2")}`]: { success: true },
+    "git rev-parse --verify task/123/2": { success: true },
+    "git log task/123/2 ^main --oneline": { success: true, stdout: "" },
+    "git branch -d task/123/2": { success: true },
+  });
+
+  try {
+    await ensureDir(join(env.worktreesDir, "task-123-1"));
+    await ensureDir(join(env.worktreesDir, "task-123-2"));
+
+    const args = parseArgs(["rm", "123/1", "123/2"]);
     await rmCommand(args);
 
   } finally {
