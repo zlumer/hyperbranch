@@ -3,10 +3,16 @@ import { TaskFile } from "../types.ts"
 
 // --- Cycle Detection ---
 
+// Helper to get dependencies as per spec
+// Only strictly enforce explicit dependencies.
+function getDependencies(task: TaskFile): string[] {
+	return task.frontmatter.dependencies || []
+}
+
 async function checkCycle(
-	waiterId: string, 
-	waiteeId: string, 
-	errorMsg: (waiter: string, waitee: string) => string
+	sourceId: string, 
+	targetId: string, 
+	errorMsg: (source: string, target: string) => string
 ) {
 	const cache = new Map<string, TaskFile>()
 	async function getTask(id: string) {
@@ -16,47 +22,62 @@ async function checkCycle(
 		return task
 	}
 
-	// 1. Identify all ancestors of waiterId (including waiterId itself)
-	// These are the nodes that, if reached from waiteeId, constitute a cycle.
-	// (Because waiterId waits for waiteeId. If waiteeId leads to waiterId (or its ancestors), 
-	//  then waiteeId effectively waits for waiterId).
+	// 1. Identify all ancestors of sourceId
+	// These are the nodes that, if reached from targetId, constitute a cycle.
+	// (Because sourceId depends on targetId. If targetId leads to sourceId (or its ancestors), 
+	//  then targetId effectively depends on sourceId).
 	const ancestors = new Set<string>()
-	let curr: string | null = waiterId
+	let curr: string | null = sourceId
 	while (curr) {
 		if (ancestors.has(curr)) break // Prevent infinite loop if parent cycle already exists
 		ancestors.add(curr)
-		const task = await getTask(curr)
-		curr = task.frontmatter.parent || null
+		try {
+			const task = await getTask(curr)
+			curr = task.frontmatter.parent || null
+		} catch {
+			// If we can't load an ancestor, stop traversing up
+			break
+		}
 	}
 
-	// 2. Traverse dependencies of waiteeId
+	// 2. Traverse dependencies of targetId
 	const visited = new Set<string>()
 	async function visit(currentId: string) {
 		if (ancestors.has(currentId)) {
-			throw new Error(errorMsg(waiterId, waiteeId))
+			throw new Error(errorMsg(sourceId, targetId))
 		}
 		if (visited.has(currentId)) return
 		visited.add(currentId)
 
-		const task = await getTask(currentId)
+		let task: TaskFile
+		try {
+			task = await getTask(currentId)
+		} catch {
+			// If we can't load a dependency, stop traversing this branch
+			return
+		}
+
 		// Only traverse explicit dependencies. 
 		// We do NOT traverse down to children (too expensive).
-		for (const depId of (task.frontmatter.dependencies || [])) {
+		for (const depId of getDependencies(task)) {
 			await visit(depId)
 		}
 	}
 
-	await visit(waiteeId)
+	await visit(targetId)
 }
 
-export async function detectDependencyCycle(sourceId: string, targetDependencyId: string) {
-	// sourceId depends on targetDependencyId. sourceId waits for targetDependencyId.
-	await checkCycle(sourceId, targetDependencyId, 
+export async function detectDependencyCycle(taskId: string, newDepId: string) {
+	// taskId depends on newDepId.
+	// Check if newDepId reaches taskId.
+	await checkCycle(taskId, newDepId, 
 		(src, tgt) => `Error: Circular dependency detected. Task ${src} depends on ${tgt}, but ${tgt} already depends on (or is ancestor of) ${src}.`)
 }
 
-export async function detectParentCycle(childId: string, potentialParentId: string) {
-	// potentialParentId becomes parent of childId. potentialParentId waits for childId.
-	await checkCycle(potentialParentId, childId,
+export async function detectParentCycle(childId: string, newParentId: string) {
+	// childId is child of newParentId.
+	// This implies newParentId depends on childId.
+	// Check if childId reaches newParentId.
+	await checkCycle(newParentId, childId,
 		(parent, child) => `Error: Circular parentage detected. Task ${parent} becomes parent of ${child}, but ${child} is already an ancestor (or dependency) of ${parent}.`)
 }
