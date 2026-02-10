@@ -111,7 +111,7 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
 
   try {
     let capturedCid = "";
-    await Docker.runContainer(config, tempDir, (cid) => {
+    await Docker.runContainer(config, (cid) => {
       capturedCid = cid;
     });
 

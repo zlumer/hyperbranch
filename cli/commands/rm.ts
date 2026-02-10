@@ -224,7 +224,7 @@ async function removeTask(taskId: string, force: boolean) {
   try {
     const output = await Git.git(["branch", "--list", `${prefix}*`]);
     branches = output.split("\n")
-      .map(b => b.trim().replace("* ", ""))
+      .map(b => b.trim().replace(/^[\*\+]\s+/, ""))
       .filter(Boolean);
   } catch {
     // No branches found

@@ -245,7 +245,7 @@ Deno.test("hb rm <task> - remove task and all runs", async () => {
   const env = setupTestEnv();
   const gitStub = mockGit({
     // List runs
-    "git branch --list task/123/*": { success: true, stdout: "  task/123/1\n* task/123/2" },
+    "git branch --list task/123/*": { success: true, stdout: "  task/123/1\n+ task/123/2" },
     
     // Run 1
     "git rev-parse --verify task/123/1": { success: true },
@@ -405,7 +405,7 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
     [`[${run1Dir}] git status --porcelain`]: { success: true, stdout: "" }, // Clean
     "git rev-parse --verify task/123/1": { success: true },
     "git rev-parse --verify task/123": { success: false }, // Base
-    "git branch --merged main": { success: true, stdout: "task/123/1" },
+    "git branch --merged main": { success: true, stdout: "  main\n+ task/123/1" },
     
     // Run 2: Dirty
     [`[${run2Dir}] git status --porcelain`]: { success: true, stdout: "M dirty.txt" }, // Dirty
@@ -445,7 +445,7 @@ Deno.test("hb rm --sweep --force - cleans merged runs with force", async () => {
     // Run 1: Clean, Merged
     [`[${run1Dir}] git status --porcelain`]: { success: true, stdout: "" },
     "git rev-parse --verify task/123/1": { success: true },
-    "git branch --merged main": { success: true, stdout: "task/123/1" },
+    "git branch --merged main": { success: true, stdout: "  main\n+ task/123/1" },
     "git rev-parse --verify task/123": { success: false }, // Base
 
     // Attempt remove WITH force

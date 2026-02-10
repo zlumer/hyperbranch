@@ -54,7 +54,7 @@ export async function checkFileExistsInBranch(branch: string, filePath: string):
 export async function isBranchMerged(branch: string, base: string): Promise<boolean> {
   try {
     const output = await git(["branch", "--merged", base]);
-    const mergedBranches = output.split("\n").map(b => b.trim());
+    const mergedBranches = output.split("\n").map(b => b.trim().replace(/^[\*\+]\s+/, ""));
     return mergedBranches.includes(branch);
   } catch {
     return false;
@@ -100,7 +100,7 @@ export async function getNextRunBranch(taskId: string): Promise<string> {
   const prefix = getRunBranchPrefix(taskId);
   try {
     const output = await git(["branch", "--list", `${prefix}*`]);
-    const branches = output.split("\n").map((b) => b.trim().replace("* ", ""));
+    const branches = output.split("\n").map((b) => b.trim().replace(/^[\*\+]\s+/, ""));
 
     let maxIdx = 0;
     for (const branch of branches) {
@@ -119,7 +119,7 @@ export async function getLatestRunBranch(taskId: string): Promise<string | null>
   const prefix = getRunBranchPrefix(taskId);
   try {
     const output = await git(["branch", "--list", `${prefix}*`]);
-    const branches = output.split("\n").map((b) => b.trim().replace("* ", "")).filter(Boolean);
+    const branches = output.split("\n").map((b) => b.trim().replace(/^[\*\+]\s+/, "")).filter(Boolean);
     
     if (branches.length === 0) return null;
 
