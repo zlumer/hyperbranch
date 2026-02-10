@@ -1,5 +1,5 @@
-import { exists } from "@std/fs/exists";
-import { join } from "@std/path";
+import { exists } from "@std/fs/exists"
+import { join } from "@std/path"
 
 // Helper to run shell command and get stdout
 async function runCmd(cmd: string[]): Promise<string> {
@@ -7,23 +7,23 @@ async function runCmd(cmd: string[]): Promise<string> {
     args: cmd.slice(1),
     stdout: "piped",
     stderr: "piped",
-  });
-  const output = await command.output();
+  })
+  const output = await command.output()
   if (!output.success) {
-    throw new Error(`Command failed: ${cmd.join(" ")}`);
+    throw new Error(`Command failed: ${cmd.join(" ")}`)
   }
-  return new TextDecoder().decode(output.stdout).trim();
+  return new TextDecoder().decode(output.stdout).trim()
 }
 
 export async function getPackageCacheMounts(): Promise<string[]> {
-  const mounts: string[] = [];
-  const cwd = Deno.cwd();
+  const mounts: string[] = []
+  const cwd = Deno.cwd()
 
   // NPM
   if (await exists(join(cwd, "package-lock.json"))) {
     try {
-      const npmCache = await runCmd(["npm", "config", "get", "cache"]);
-      mounts.push(`-v ${npmCache}:/root/.npm`);
+      const npmCache = await runCmd(["npm", "config", "get", "cache"])
+      mounts.push(`-v ${npmCache}:/root/.npm`)
     } catch {
       // Ignore if npm not found or fails
     }
@@ -32,8 +32,8 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   // Yarn
   if (await exists(join(cwd, "yarn.lock"))) {
     try {
-      const yarnCache = await runCmd(["yarn", "cache", "dir"]);
-      mounts.push(`-v ${yarnCache}:/usr/local/share/.cache/yarn`);
+      const yarnCache = await runCmd(["yarn", "cache", "dir"])
+      mounts.push(`-v ${yarnCache}:/usr/local/share/.cache/yarn`)
     } catch {
       // Ignore
     }
@@ -42,74 +42,74 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   // PNPM
   if (await exists(join(cwd, "pnpm-lock.yaml"))) {
     try {
-      const pnpmStore = await runCmd(["pnpm", "store", "path"]);
-      mounts.push(`-v ${pnpmStore}:/root/.local/share/pnpm/store`);
+      const pnpmStore = await runCmd(["pnpm", "store", "path"])
+      mounts.push(`-v ${pnpmStore}:/root/.local/share/pnpm/store`)
     } catch {
       // Ignore
     }
   }
 
-  return mounts;
+  return mounts
 }
 
 export async function getAgentConfigMount(): Promise<string> {
-  const home = Deno.env.get("HOME");
+  const home = Deno.env.get("HOME")
   if (!home) {
-    throw new Error("HOME environment variable not set");
+    throw new Error("HOME environment variable not set")
   }
-  const opencodeDir = join(home, ".opencode");
+  const opencodeDir = join(home, ".opencode")
   if (!(await exists(opencodeDir))) {
     // Ensure it exists on host so mount doesn't fail or create root-owned dir
-    await Deno.mkdir(opencodeDir, { recursive: true });
+    await Deno.mkdir(opencodeDir, { recursive: true })
   }
   // Read-only mount
-  return `-v ${opencodeDir}:/root/.opencode:ro`;
+  return `-v ${opencodeDir}:/root/.opencode:ro`
 }
 
 export function getEnvVars(keys: string[]): Record<string, string> {
-  const vars: Record<string, string> = {};
+  const vars: Record<string, string> = {}
   for (const key of keys) {
-    const val = Deno.env.get(key);
+    const val = Deno.env.get(key)
     if (val !== undefined) {
-      vars[key] = val;
+      vars[key] = val
     }
   }
-  return vars;
+  return vars
 }
 
 export function setupSignalHandler(containerId: string): void {
   // Deno.addSignalListener is the API for SIGINT
   const handler = async () => {
-    console.log("\nReceived SIGINT. Stopping container...");
+    console.log("\nReceived SIGINT. Stopping container...")
     try {
       const cmd = new Deno.Command("docker", {
         args: ["stop", containerId],
         stdout: "null",
         stderr: "null",
-      });
-      await cmd.output();
-      console.log("Container stopped.");
+      })
+      await cmd.output()
+      console.log("Container stopped.")
     } catch (e) {
-      console.error(`Error stopping container: ${e}`);
+      console.error(`Error stopping container: ${e}`)
     }
     Deno.exit(130); // Standard SIGINT exit code
-  };
-  Deno.addSignalListener("SIGINT", handler);
+  }
+  Deno.addSignalListener("SIGINT", handler)
 }
 
 export async function getUserId(): Promise<string> {
   if (Deno.build.os === "linux") {
     try {
-      const uidProcess = new Deno.Command("id", { args: ["-u"] });
-      const gidProcess = new Deno.Command("id", { args: ["-g"] });
+      const uidProcess = new Deno.Command("id", { args: ["-u"] })
+      const gidProcess = new Deno.Command("id", { args: ["-g"] })
       const uid = new TextDecoder().decode((await uidProcess.output()).stdout)
-        .trim();
+        .trim()
       const gid = new TextDecoder().decode((await gidProcess.output()).stdout)
-        .trim();
-      return `${uid}:${gid}`;
+        .trim()
+      return `${uid}:${gid}`
     } catch {
-      console.warn("Failed to detect UID/GID, defaulting to 'node' user.");
+      console.warn("Failed to detect UID/GID, defaulting to 'node' user.")
     }
   }
-  return "node";
+  return "node"
 }
