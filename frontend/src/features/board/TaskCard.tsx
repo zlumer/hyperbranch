@@ -1,7 +1,6 @@
-
-import { type Task } from '../../api/mock-service';
-import { cn } from '../../lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { type Task } from "../../api/service";
+import { cn } from "../../lib/utils";
+import { useNavigate } from "react-router-dom";
 
 interface TaskCardProps {
   task: Task;
@@ -25,7 +24,7 @@ export function TaskCard({ task, className, isDragging }: TaskCardProps) {
       onClick={handleClick}
       className={cn(
         "bg-white p-4 rounded-lg shadow-sm mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow border border-gray-200",
-        className
+        className,
       )}
     >
       <div className="text-xs text-gray-500 font-mono mb-1">#{task.id}</div>

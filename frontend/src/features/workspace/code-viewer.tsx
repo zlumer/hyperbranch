@@ -1,32 +1,33 @@
-import { useState, useEffect } from 'react';
-import { getFileContent } from '../../api/mock-service';
+import { useEffect, useState } from "react";
+import { getFileContent } from "../../api/service";
 
 interface CodeViewerProps {
+  taskId: string;
   runId: string;
   path: string | null;
 }
 
-export function CodeViewer({ runId, path }: CodeViewerProps) {
-  const [content, setContent] = useState<string>('');
+export function CodeViewer({ taskId, runId, path }: CodeViewerProps) {
+  const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!path) {
-      setContent('');
+      setContent("");
       return;
     }
 
     setLoading(true);
     setError(null);
-    getFileContent(runId, path)
+    getFileContent(taskId, runId, path)
       .then(setContent)
       .catch((err) => {
-        console.error('Failed to load file content:', err);
-        setError('Failed to load file content');
+        console.error("Failed to load file content:", err);
+        setError("Failed to load file content");
       })
       .finally(() => setLoading(false));
-  }, [runId, path]);
+  }, [taskId, runId, path]);
 
   if (!path) {
     return (
@@ -51,9 +52,7 @@ export function CodeViewer({ runId, path }: CodeViewerProps) {
       </div>
       <div className="flex text-sm font-mono overflow-auto relative">
         <div className="bg-gray-50 border-r border-gray-200 py-4 px-2 text-right text-gray-400 select-none min-w-[3rem]">
-          {content.split('\n').map((_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
+          {content.split("\n").map((_, i) => <div key={i}>{i + 1}</div>)}
         </div>
         <pre className="p-4 m-0 overflow-auto whitespace-pre tab-4">
           <code>{content}</code>

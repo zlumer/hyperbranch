@@ -1,19 +1,42 @@
-import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react';
-import { type Task, type TaskStatus, getTasks, updateTaskStatus, updateTaskOrder, createTask } from '../api/mock-service';
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  createTask,
+  getTasks,
+  type Task,
+  type TaskStatus,
+  updateTaskStatus,
+} from "../api/service";
 
-// Define the shape of our context
 interface BoardContextType {
   tasks: Task[];
   columns: TaskStatus[];
   isLoading: boolean;
-  moveTask: (taskId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
-  addTask: (task: Omit<Task, 'id' | 'order'>) => Promise<void>;
+  moveTask: (
+    taskId: string,
+    newStatus: TaskStatus,
+    newIndex?: number,
+  ) => Promise<void>;
+  addTask: (task: { title: string; parentId?: string }) => Promise<void>;
   refreshTasks: () => Promise<void>;
 }
 
 const BoardContext = createContext<BoardContextType | undefined>(undefined);
 
-export const COLUMNS: TaskStatus[] = ['todo', 'in-progress', 'done'];
+export const COLUMNS: TaskStatus[] = [
+  "todo",
+  "plan",
+  "build",
+  "review",
+  "done",
+  "cancelled",
+];
 
 export function BoardProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -25,7 +48,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const fetchedTasks = await getTasks();
       setTasks(fetchedTasks);
     } catch (error) {
-      console.error('Failed to fetch tasks:', error);
+      console.error("Failed to fetch tasks:", error);
     } finally {
       setIsLoading(false);
     }
@@ -35,53 +58,38 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     refreshTasks();
   }, []);
 
-  const moveTask = async (taskId: string, newStatus: TaskStatus, newIndex?: number) => {
-    // Optimistic update
+  const moveTask = async (
+    taskId: string,
+    newStatus: TaskStatus,
+    newIndex?: number,
+  ) => {
     setTasks((prevTasks) => {
-      const task = prevTasks.find(t => t.id === taskId);
-      if (!task) return prevTasks;
+      const taskIndex = prevTasks.findIndex((t) => t.id === taskId);
+      if (taskIndex === -1) return prevTasks;
 
-      const otherTasks = prevTasks.filter(t => t.id !== taskId);
+      const task = prevTasks[taskIndex];
+      const newTasks = [...prevTasks];
+      newTasks.splice(taskIndex, 1);
+
       const updatedTask = { ...task, status: newStatus };
-
-      // If no index provided (simple status change), append to end of new status list
-      if (newIndex === undefined) {
-          // This logic is simple, but for reordering we need index
-          // If we don't have index, we can just update status and let mock backend handle order or keep it simple
-           return [...otherTasks, updatedTask]; 
-      }
-
-      // If index provided, we need to insert at correct position
-      const tasksInTargetColumn = otherTasks.filter(t => t.status === newStatus).sort((a, b) => a.order - b.order);
-      const tasksInOtherColumns = otherTasks.filter(t => t.status !== newStatus);
-
-      tasksInTargetColumn.splice(newIndex, 0, updatedTask);
-      
-      // Re-assign orders
-      const reorderedTargetColumn = tasksInTargetColumn.map((t, index) => ({ ...t, order: index }));
-
-      return [...tasksInOtherColumns, ...reorderedTargetColumn];
+      newTasks.push(updatedTask);
+      return newTasks;
     });
 
     try {
-      if (newIndex !== undefined) {
-          await updateTaskOrder(taskId, newStatus, newIndex);
-      } else {
-          await updateTaskStatus(taskId, newStatus);
-      }
+      await updateTaskStatus(taskId, newStatus);
     } catch (error) {
-      console.error('Failed to update task status:', error);
-      // Revert on failure
+      console.error("Failed to update task status:", error);
       refreshTasks();
     }
   };
 
-  const addTask = async (task: Omit<Task, 'id' | 'order'>) => {
+  const addTask = async (task: { title: string; parentId?: string }) => {
     try {
       const newTask = await createTask(task);
       setTasks((prev) => [...prev, newTask]);
     } catch (error) {
-      console.error('Failed to create task:', error);
+      console.error("Failed to create task:", error);
     }
   };
 
@@ -94,16 +102,17 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       addTask,
       refreshTasks,
     }),
-    [tasks, isLoading]
+    [tasks, isLoading],
   );
 
-  return <BoardContext.Provider value={value}>{children}</BoardContext.Provider>;
+  return <BoardContext.Provider value={value}>{children}
+  </BoardContext.Provider>;
 }
 
 export function useBoardContext() {
   const context = useContext(BoardContext);
   if (context === undefined) {
-    throw new Error('useBoardContext must be used within a BoardProvider');
+    throw new Error("useBoardContext must be used within a BoardProvider");
   }
   return context;
 }
