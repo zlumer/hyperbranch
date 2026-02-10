@@ -1,6 +1,4 @@
 
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { type Task } from '../../api/mock-service';
 import { cn } from '../../lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -8,25 +6,15 @@ import { useNavigate } from 'react-router-dom';
 interface TaskCardProps {
   task: Task;
   className?: string;
+  isDragging?: boolean;
 }
 
-export function TaskCard({ task, className }: TaskCardProps) {
+export function TaskCard({ task, className, isDragging }: TaskCardProps) {
   const navigate = useNavigate();
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
 
   const handleClick = () => {
+    // Only navigate if we're not dragging
+    // react-kanban-kit might handle drag state differently, but for now we rely on the prop
     if (!isDragging) {
       navigate(`/tasks/${task.id}`);
     }
@@ -34,10 +22,6 @@ export function TaskCard({ task, className }: TaskCardProps) {
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
       onClick={handleClick}
       className={cn(
         "bg-white p-4 rounded-lg shadow-sm mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow border border-gray-200",

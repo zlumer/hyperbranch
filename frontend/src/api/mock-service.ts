@@ -4,6 +4,7 @@ export interface Task {
   title: string;
   status: 'todo' | 'in-progress' | 'done';
   description?: string;
+  order: number;
 }
 
 export type TaskStatus = Task['status'];
@@ -29,11 +30,11 @@ export interface LogEntry {
 }
 
 const tasks: Task[] = [
-  { id: '1', title: 'Implement Login', status: 'done', description: 'Implement user authentication using JWT.' },
-  { id: '2', title: 'Set up Project', status: 'done', description: 'Initialize the repo and install dependencies.' },
-  { id: '3', title: 'Design Database', status: 'in-progress', description: 'Create the schema for users and tasks.' },
-  { id: '4', title: 'Create API Endpoints', status: 'todo', description: 'Build REST APIs for task management.' },
-  { id: '5', title: 'Frontend UI', status: 'todo', description: 'Develop the React application.' },
+  { id: '1', title: 'Implement Login', status: 'done', description: 'Implement user authentication using JWT.', order: 0 },
+  { id: '2', title: 'Set up Project', status: 'done', description: 'Initialize the repo and install dependencies.', order: 1 },
+  { id: '3', title: 'Design Database', status: 'in-progress', description: 'Create the schema for users and tasks.', order: 0 },
+  { id: '4', title: 'Create API Endpoints', status: 'todo', description: 'Build REST APIs for task management.', order: 0 },
+  { id: '5', title: 'Frontend UI', status: 'todo', description: 'Develop the React application.', order: 1 },
 ];
 
 const runs: Run[] = [
@@ -175,10 +176,41 @@ export const updateTaskStatus = async (id: string, status: TaskStatus): Promise<
   });
 };
 
-export const createTask = async (task: Omit<Task, 'id'>): Promise<Task> => {
+export const updateTaskOrder = async (id: string, status: TaskStatus, newOrder: number): Promise<Task> => {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            const taskIndex = tasks.findIndex((t) => t.id === id);
+            if (taskIndex > -1) {
+                const task = tasks[taskIndex];
+                
+                // Remove task from old position/status logic if needed, but here we just update
+                task.status = status;
+                
+                // Shift other items if necessary - simple implementation: just set order
+                // In a real app, we'd shift other items' orders
+                tasks.forEach(t => {
+                    if (t.status === status && t.order >= newOrder && t.id !== id) {
+                        t.order++;
+                    }
+                });
+                
+                task.order = newOrder;
+                resolve({ ...task });
+            } else {
+                reject(new Error('Task not found'));
+            }
+        }, 300);
+    });
+};
+
+export const createTask = async (task: Omit<Task, 'id' | 'order'>): Promise<Task> => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      const newTask: Task = { ...task, id: Math.random().toString(36).substr(2, 9) };
+      const newTask: Task = { 
+          ...task, 
+          id: Math.random().toString(36).substr(2, 9),
+          order: tasks.filter(t => t.status === task.status).length 
+      };
       tasks.push(newTask);
       resolve(newTask);
     }, 300);
