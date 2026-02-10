@@ -30,11 +30,22 @@ export interface LogEntry {
   message: string;
 }
 
+const extractTitle = (body?: string): string => {
+  if (!body) return "Untitled Task";
+  const lines = body.split("\n");
+  const titleLine = lines.find((line) => line.trim().startsWith("#"));
+  if (titleLine) {
+    return titleLine.replace(/^#+\s*/, "").trim();
+  }
+  const firstLine = lines.find((line) => line.trim().length > 0);
+  return firstLine ? firstLine.trim() : "Untitled Task";
+};
+
 export const getTasks = async (): Promise<Task[]> => {
   const res = await apiClient.get("/tasks");
   return res.data.map((t: any, index: number) => ({
     id: t.id,
-    title: t.title,
+    title: extractTitle(t.body),
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: index,
@@ -46,7 +57,7 @@ export const getTask = async (id: string): Promise<Task> => {
   const t = res.data;
   return {
     id: t.id,
-    title: t.title,
+    title: extractTitle(t.body),
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,
@@ -60,7 +71,7 @@ export const createTask = async (
   const t = res.data;
   return {
     id: t.id,
-    title: t.title,
+    title: extractTitle(t.body),
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,
@@ -75,7 +86,7 @@ export const updateTaskStatus = async (
   const t = res.data;
   return {
     id: t.id,
-    title: t.title,
+    title: extractTitle(t.body),
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,

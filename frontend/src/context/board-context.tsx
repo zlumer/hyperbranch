@@ -61,7 +61,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const moveTask = async (
     taskId: string,
     newStatus: TaskStatus,
-    newIndex?: number,
+    _newIndex?: number,
   ) => {
     setTasks((prevTasks) => {
       const taskIndex = prevTasks.findIndex((t) => t.id === taskId);

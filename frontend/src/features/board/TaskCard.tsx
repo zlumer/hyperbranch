@@ -28,7 +28,7 @@ export function TaskCard({ task, className, isDragging }: TaskCardProps) {
       )}
     >
       <div className="text-xs text-gray-500 font-mono mb-1">#{task.id}</div>
-      <h3 className="font-medium text-gray-900">{task.title}</h3>
+      <h3 className="font-medium text-gray-900 truncate" title={task.title}>{task.title}</h3>
     </div>
   );
 }
