@@ -69,27 +69,6 @@ export async function run(
 
   await Git.createWorktree(runBranch, baseBranch, worktreePath);
 
-  // Gitignore Check
-  const gitignorePath = join(worktreePath, ".gitignore");
-  const ignoreEntry = ".hyperbranch/.current-run/";
-  try {
-    let content = "";
-    if (await exists(gitignorePath)) {
-      content = await Deno.readTextFile(gitignorePath);
-    }
-
-    if (!content.includes(ignoreEntry)) {
-      const newContent = content.endsWith("\n") || content === ""
-        ? content + ignoreEntry + "\n"
-        : content + "\n" + ignoreEntry + "\n";
-
-      await Deno.writeTextFile(gitignorePath, newContent);
-      // We don't commit this change, just have it in the worktree to prevent accidental commits of run artifacts
-    }
-  } catch (e) {
-    console.warn("Warning: Failed to update .gitignore:", e);
-  }
-
   // 4. Asset Preparation
   await Docker.prepareWorktreeAssets(worktreePath, runDir, options.dockerfile);
 
