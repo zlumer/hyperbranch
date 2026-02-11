@@ -20,7 +20,7 @@ const app = new Hono();
 
 // Global Middleware
 app.use("*", corsMiddleware);
-app.use("*", authMiddleware);
+// app.use("*", authMiddleware);
 
 // Error Handling
 app.onError(errorHandler);
