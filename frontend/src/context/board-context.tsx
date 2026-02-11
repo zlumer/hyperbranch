@@ -13,6 +13,7 @@ import {
   type TaskStatus,
   updateTaskStatus,
 } from "../api/service";
+import { literal, union } from "zod"
 
 interface BoardContextType {
   tasks: Task[];
@@ -37,6 +38,16 @@ export const COLUMNS: TaskStatus[] = [
   "done",
   "cancelled",
 ];
+
+// Zod column validator
+export const BoardColumnTypeSchema = union([
+  literal("todo"),
+  literal("plan"),
+  literal("build"),
+  literal("review"),
+  literal("done"),
+  literal("cancelled"),
+])
 
 export function BoardProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);

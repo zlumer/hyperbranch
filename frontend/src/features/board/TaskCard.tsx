@@ -23,12 +23,12 @@ export function TaskCard({ task, className, isDragging }: TaskCardProps) {
     <div
       onClick={handleClick}
       className={cn(
-        "bg-white p-4 rounded-lg shadow-sm mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow border border-gray-200",
+        "bg-white p-2 rounded-lg shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow border border-gray-200",
         className,
       )}
     >
-      <div className="text-xs text-gray-500 font-mono mb-1">#{task.id}</div>
-      <h3 className="font-medium text-gray-900 truncate" title={task.title}>{task.title}</h3>
+      <div className="text-xs text-gray-500 font-mono mb-0.5">#{task.id}</div>
+      <h3 className="font-normal text-sm text-gray-900 truncate" title={task.title}>{task.title}</h3>
     </div>
   );
 }

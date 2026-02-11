@@ -1,5 +1,5 @@
-import { useBoardContext } from "../../context/board-context";
-import { type BoardData, type BoardItem, Kanban } from "react-kanban-kit";
+import { BoardColumnTypeSchema, useBoardContext } from "../../context/board-context";
+import { type BoardData, type BoardItem, type BoardProps, Kanban } from "react-kanban-kit";
 import { TaskCard } from "./TaskCard";
 import { useMemo } from "react";
 import { type Task } from "../../api/service";
@@ -65,7 +65,7 @@ export function Board() {
     columns,
   ]);
 
-  const configMap: any = {
+  const configMap: BoardProps["configMap"] = {
     column: {
       render: ({ data }: CardRenderProps) => (
         <div className="flex items-center justify-between mb-4">
@@ -92,8 +92,9 @@ export function Board() {
       position: number;
     },
   ) => {
-    if (columns.includes(toColumnId as any)) {
-      await moveTask(cardId, toColumnId as any, position);
+	const parsedToColumnId = BoardColumnTypeSchema.parse(toColumnId)
+    if (columns.includes(parsedToColumnId)) {
+      await moveTask(cardId, parsedToColumnId, position);
     }
   };
 
@@ -108,15 +109,17 @@ export function Board() {
   }
 
   return (
-    <div className="h-full p-4 overflow-x-auto bg-gray-50">
+    <div className="h-full overflow-x-auto">
       <Kanban
         dataSource={boardData}
         configMap={configMap}
         onCardMove={handleCardMove}
-        columnWrapperClassName={() =>
-          "bg-gray-100 rounded-lg p-4 min-w-[300px] mr-4 flex flex-col h-full"}
-        columnHeaderClassName={() => ""}
+        columnWrapperClassName={() => ""}
+        columnHeaderClassName={() => "px-4 pt-4"}
         columnListContentClassName={() => "flex-1 space-y-3 min-h-[100px]"}
+		columnClassName={() => "px-1"}
+		columnStyle={() => ({ padding: "4px" })}
+		cardWrapperClassName=""
       />
     </div>
   );
