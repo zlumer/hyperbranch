@@ -116,7 +116,7 @@ export function Board() {
         onCardMove={handleCardMove}
         columnWrapperClassName={() => ""}
         columnHeaderClassName={() => "px-4 pt-4"}
-        columnListContentClassName={() => "flex-1 space-y-3 min-h-[100px]"}
+        columnListContentClassName={() => "flex-1 space-y-3 min-h-[100px] mb-1"}
 		columnClassName={() => "px-1"}
 		columnStyle={() => ({ padding: "4px" })}
 		cardWrapperClassName=""
