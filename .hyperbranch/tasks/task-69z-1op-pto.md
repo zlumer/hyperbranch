@@ -12,7 +12,7 @@ Integrate `rivet-dev/sandbox-agent` to replace the current custom agent implemen
 
 1.  **Dependencies**: Add `sandbox-agent` SDK to `cli/deno.json`.
 2.  **Docker Environment**:
-    -   Update `cli/assets/Dockerfile` to install `sandbox-agent` (curl install) and pre-install agents (`opencode`, `claude`, `codex`).
+    -   Update `cli/assets/Dockerfile` to install `sandbox-agent` (curl install) and pre-install agents (`opencode` at least).
     -   Update `cli/assets/run.sh` to start the `sandbox-agent` server (`sandbox-agent server --host 0.0.0.0 --port 2468 --no-token`) instead of the direct task command.
     -   Remove legacy git commit logic from `run.sh` (commits will now be driven by the host CLI).
 3.  **Docker Utilities**:
@@ -31,7 +31,7 @@ Integrate `rivet-dev/sandbox-agent` to replace the current custom agent implemen
         -   **Streaming**: Stream events to console (human-readable) and append raw JSON to `join(runDir, "transcript.jsonl")`.
         -   **Interaction**: Start a parallel `Deno.stdin` reader loop to send user messages to the agent via `postMessage`.
         -   **Inspector**: If `--inspector` is set, print the UI URL (`http://localhost:<inspector_port>/ui/`).
-        -   **Completion**: On "completion" event (or clean exit), execute `git add . && git commit` on the host.
+        -   **Completion**: On "completion" event (or clean exit), execute `git add . && git commit` in the container.
         -   **Cleanup**: Stop the container after successful completion (unless `--keep` or similar logic is added later).
 5.  **CLI Command**:
     -   Update `cli/commands/run.ts`:
