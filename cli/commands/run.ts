@@ -6,25 +6,12 @@ export async function runCommand(args: Args) {
   const taskId = args._[1] as string;
   if (!taskId) {
     console.error("Error: Task ID is required.");
-    console.error("Usage: hb run <task-id> [options]");
+    console.error("Usage: hb run <task-id>");
     Deno.exit(1);
   }
 
-  const options: Runs.RunOptions = {
-    image: args["image"] as string,
-    dockerfile: args["dockerfile"] as string,
-    dockerArgs: (args["docker-args"] as string)?.split(" ").filter(Boolean),
-  };
-
-  if (args["exec"]) {
-    options.exec = parseArgsString(args["exec"] as string);
-  } else if (args["exec-file"]) {
-    const file = args["exec-file"] as string;
-    options.exec = ["./" + file];
-  }
-
   try {
-    const { runId } = await Runs.run(taskId, options);
+    const { runId } = await Runs.run(taskId);
     
     // Runs.run already logs success messages
     console.log(`Run ID: ${runId}`);

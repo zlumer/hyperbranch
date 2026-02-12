@@ -57,9 +57,8 @@ app.delete("/:id", async (c) => {
 // Run task
 app.post("/:id/run", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json().catch(() => ({})); // Optional body
-
-  const result = await Runs.run(id, body);
+  
+  const result = await Runs.run(id);
   return c.json(result);
 });
 

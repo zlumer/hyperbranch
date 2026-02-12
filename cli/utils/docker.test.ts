@@ -1,101 +1,41 @@
-import { assertEquals, assertRejects } from "@std/assert";
-import { assertSpyCalls, Spy, stub } from "@std/testing/mock";
+import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertSpyCalls, stub } from "@std/testing/mock";
 import { join } from "@std/path";
-import { ensureDir } from "@std/fs/ensure-dir";
 import * as Docker from "./docker.ts";
 
-// Mock Deno.Command spawn for shell execution
-function mockShellRun(
-  expectedArgs: string[],
-  envChecks: Record<string, string>,
-  output: { stdout: string; stderr: string; code: number },
-) {
-  return stub(
-    Deno,
-    "Command",
-    // deno-lint-ignore no-explicit-any
-    (cmd: any, options: any) => {
-      const args = options?.args || [];
-
-      // Update to match: sh -c "nohup ./run.sh ... &"
-      if (cmd === "sh" && args[0] === "-c" && args[1].includes("run.sh")) {
-        // Verify environment variables
-        if (options?.env) {
-          for (const [k, v] of Object.entries(envChecks)) {
-            if (options.env[k] !== v) {
-              throw new Error(
-                `Env mismatch for ${k}. Expected ${v}, got ${options.env[k]}`,
-              );
-            }
-          }
-        }
-
-        // Simulate side effects (CID + logs)
-        if (options?.cwd) {
-          // Create hb.cid file to simulate successful start
-          Deno.writeTextFileSync(join(options.cwd, "hb.cid"), "mock-cid-script");
-          // Create log files
-          Deno.writeTextFileSync(join(options.cwd, "stdout.log"), output.stdout);
-          Deno.writeTextFileSync(join(options.cwd, "stderr.log"), output.stderr);
-        }
-
-        // Return a mock process that exits immediately (simulating the 'nohup &')
-        return {
-          spawn: () => ({
-            stdout: null, // Output redirected to files
-            stderr: null,
-            status: Promise.resolve({ success: true, code: 0 }),
-            output: () => Promise.resolve({ success: true, code: 0 }),
-            kill: () => {},
-            ref: () => {},
-            unref: () => {},
-          }),
-        } as unknown as Deno.Command;
-      }
-
-      // Fallback for docker build etc
-      return {
-        output: () => Promise.resolve({ success: true, code: 0 }),
-      } as unknown as Deno.Command;
-    },
-  );
-}
-
-Deno.test("buildImage - calls docker build", async () => {
-  // deno-lint-ignore no-explicit-any
-  const cmdStub = stub(Deno, "Command", (cmd: any, opts: any) => {
-    return {
-      output: () => Promise.resolve({ success: true, code: 0 }),
-    } as unknown as Deno.Command;
-  });
-
-  try {
-    await Docker.buildImage("Dockerfile.test", "test-tag");
-    assertSpyCalls(cmdStub, 1);
-    const args = (cmdStub.calls[0].args[1] as Deno.CommandOptions).args || [];
-    assertEquals(args, [
-      "build",
-      "-f",
-      "Dockerfile.test",
-      "-t",
-      "test-tag",
-      ".",
-    ]);
-  } finally {
-    cmdStub.restore();
-  }
-});
-
-Deno.test("runContainer - executes bash run.sh with envs", async () => {
+Deno.test("runContainer - generates compose and runs docker", async () => {
   const tempDir = await Deno.makeTempDir();
-  const cmdStub = mockShellRun(
-    ["run.sh"],
-    {
-      HB_PROJECT_NAME: "test-project",
-      HB_RUN_DIR: tempDir,
-    },
-    { stdout: "Script Output", stderr: "", code: 0 },
-  );
+  const runDir = join(tempDir, "run");
+  await Deno.mkdir(runDir);
+  
+  // Mock Deno.Command
+  // @ts-ignore: mocking Deno.Command
+  const cmdStub = stub(Deno, "Command", (cmd: string, options: any) => {
+    const args = options?.args || [];
+    
+    // Mock docker compose run
+    if (cmd === "docker" && args[0] === "compose" && args[3] === "run") {
+        return {
+            output: () => Promise.resolve({ success: true, code: 0, stdout: new Uint8Array(), stderr: new Uint8Array() }),
+        } as any;
+    }
+    
+    // Mock docker inspect
+    if (cmd === "docker" && args[0] === "inspect") {
+        return {
+            output: () => Promise.resolve({ 
+                success: true, 
+                code: 0, 
+                stdout: new TextEncoder().encode("mock-cid\n"), 
+                stderr: new Uint8Array() 
+            }),
+        } as any;
+    }
+
+    return {
+        output: () => Promise.resolve({ success: false, code: 1, stderr: new TextEncoder().encode("unknown command") }),
+    } as any;
+  });
 
   const config: Docker.DockerConfig = {
     image: "test-image",
@@ -103,13 +43,11 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
     exec: ["echo", "hello"],
     workdir: "/app",
     hostWorkdir: tempDir,
-    runDir: tempDir,
+    runDir: runDir,
     mounts: ["-v /cache:/cache"],
     env: { FOO: "BAR" },
     user: "1000:1000",
-    dockerArgs: ["--network", "host"],
   };
-
 
   try {
     let capturedCid = "";
@@ -117,18 +55,21 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
       capturedCid = cid;
     });
 
-    assertEquals(capturedCid, "mock-cid-script");
+    assertEquals(capturedCid, "mock-cid");
 
-    const stdout = await Deno.readTextFile(join(tempDir, "stdout.log"));
-    assertEquals(stdout, "Script Output");
-    
-    // Also verify docker-compose.yml was created
-    const composeFile = join(tempDir, "docker-compose.yml");
-    const composeContent = await Deno.readTextFile(composeFile);
-    if (!composeContent.includes("container_name: test-project")) {
-        throw new Error("docker-compose.yml missing container_name");
-    }
-    
+    // Verify .env
+    const envContent = await Deno.readTextFile(join(runDir, ".env"));
+    assertStringIncludes(envContent, "FOO=BAR");
+
+    // Verify docker-compose.yml
+    const composeContent = await Deno.readTextFile(join(runDir, "docker-compose.yml"));
+    assertStringIncludes(composeContent, "image: test-image");
+    assertStringIncludes(composeContent, "container_name: test-project");
+
+    // Verify hb.cid file
+    const cidFileContent = await Deno.readTextFile(join(runDir, "hb.cid"));
+    assertEquals(cidFileContent, "mock-cid");
+
   } finally {
     cmdStub.restore();
     await Deno.remove(tempDir, { recursive: true });

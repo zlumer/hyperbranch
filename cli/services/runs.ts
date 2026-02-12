@@ -14,14 +14,6 @@ import {
   WORKTREES_DIR,
 } from "../utils/paths.ts";
 
-export interface RunOptions {
-  image?: string;
-  dockerfile?: string;
-  exec?: string[];
-  env?: Record<string, string>;
-  dockerArgs?: string[];
-}
-
 export interface RunResult {
   runId: string;
   containerId: string;
@@ -29,7 +21,6 @@ export interface RunResult {
 
 export async function run(
   taskId: string,
-  options: RunOptions = {},
 ): Promise<RunResult> {
   // Mocking for tests
   if (Deno.env.get("HB_MOCK_RUNS") === "true") {
@@ -71,32 +62,23 @@ export async function run(
   await GitWorktree.createWorktree(runBranch, baseBranch, worktreePath);
 
   // 4. Asset Preparation
-  await Docker.prepareWorktreeAssets(worktreePath, runDir, options.dockerfile);
+  await Docker.prepareWorktreeAssets(worktreePath, runDir);
 
   // 5. Environment Setup
   const mounts = await System.getPackageCacheMounts();
   mounts.push(await System.getAgentConfigMount());
 
   const env = System.getEnvVars(config.env_vars || []);
-  if (options.env) {
-    Object.assign(env, options.env);
-  }
 
   const user = await System.getUserId();
 
   // 6. Docker Image Setup
-  let image = options.image ||
-    "mcr.microsoft.com/devcontainers/typescript-node:22";
-  if (options.dockerfile) {
-    // We define the image tag here so that Docker Compose can tag the built image.
-    // The actual build happens in Docker.runContainer via 'docker compose run --build'.
-    image = `hyperbranch-run:${taskId}`;
-  }
+  const image = "mcr.microsoft.com/devcontainers/typescript-node:22";
 
   // 7. Command Construction
   const taskFile = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
   // Default exec command
-  let execCmd = [
+  const execCmd = [
     "npx",
     "-y",
     "opencode-ai",
@@ -107,14 +89,9 @@ export async function run(
     "Please complete this task.",
   ];
 
-  if (options.exec) {
-    execCmd = options.exec;
-  }
-
   const dockerConfig: Docker.DockerConfig = {
     image,
     name: `hb-${taskId}-${safeBranchName.split("-").pop()}`, // hb-<task>-<runIdx>
-    dockerfile: options.dockerfile,
     exec: execCmd,
     workdir: "/app",
     hostWorkdir: worktreePath,
@@ -125,7 +102,6 @@ export async function run(
       HB_TASK_ID: taskId,
     },
     user,
-    dockerArgs: options.dockerArgs || [],
   };
 
   // 8. Launch Container
@@ -139,6 +115,7 @@ export async function run(
     throw e;
   }
 }
+
 
 export async function stop(taskId: string): Promise<void> {
   if (Deno.env.get("HB_MOCK_RUNS") === "true") {
