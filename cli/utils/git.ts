@@ -8,36 +8,6 @@ import {
 
 // Helper to run git command
 export async function git(args: string[], cwd?: string): Promise<string> {
-  if (Deno.env.get("HB_MOCK_GIT") === "true") {
-    // Return dummy output for common commands if needed
-    if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") return "main";
-    if (args[0] === "--version") return "git version 2.39.0"; // Default mock version
-    // Mock run branches for listRuns
-    if (args[0] === "branch" && args[1] === "--list") {
-      if (args[2]?.includes("task/123")) {
-        return "  task/123/1\n* task/123/2";
-      }
-      return "";
-    }
-    // Mock ls-tree for listFilesDetailed
-    if (args[0] === "ls-tree") {
-      return "100644 blob hash\tfile.txt\n040000 tree hash\tdir";
-    }
-    // Mock show for readFile
-    if (args[0] === "show") {
-      return "mock file content";
-    }
-    // Mock cat-file -t for getType
-    if (args[0] === "cat-file" && args[1] === "-t") {
-      // Basic mock: if path ends with .txt or has no extension?
-      // The ref is passed as args[2] "branch:path"
-      const ref = args[2] || "";
-      if (ref.includes("dir")) return "tree";
-      return "blob";
-    }
-
-    return "";
-  }
   const command = new Deno.Command("git", {
     args,
     cwd: cwd || Deno.cwd(),
@@ -311,4 +281,3 @@ export async function getUnmergedCommits(
   // Returns commits in branch that are not in base
   return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
 }
-

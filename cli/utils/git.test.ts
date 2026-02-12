@@ -53,8 +53,6 @@ function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, suc
 }
 
 // Ensure mock git is disabled for these tests as they use their own stub
-Deno.env.set("HB_MOCK_GIT", "false");
-
 Deno.test("getNextRunBranch - increments index", async () => {
 	const prefix = getRunBranchPrefix("123");
 	const commandStub = mockGit({

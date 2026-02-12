@@ -6,9 +6,6 @@ import { git } from "../utils/git.ts";
 
 Deno.test("Live GitWorktree Integration (No Mocks)", async (t) => {
   // 1. Setup Environment
-  const originalMockGit = Deno.env.get("HB_MOCK_GIT");
-  Deno.env.set("HB_MOCK_GIT", "false"); // Disable mocks to use real git
-
   const tempDir = await Deno.makeTempDir({ prefix: "hb-live-test-" });
   const repoDir = join(tempDir, "repo");
   const worktreeDir = join(tempDir, "wt");
@@ -92,10 +89,6 @@ Deno.test("Live GitWorktree Integration (No Mocks)", async (t) => {
     });
 
   } finally {
-    // Restore Env
-    if (originalMockGit) Deno.env.set("HB_MOCK_GIT", originalMockGit);
-    else Deno.env.delete("HB_MOCK_GIT");
-
     // Cleanup
     try {
       await Deno.remove(tempDir, { recursive: true });

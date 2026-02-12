@@ -38,10 +38,6 @@ function mockGitCommand(handler: (args: string[]) => string | Promise<string>) {
 }
 
 Deno.test("GitWorktree Integration", async (t) => {
-  // Ensure we bypass the internal mock in git.ts
-  const originalEnv = Deno.env.get("HB_MOCK_GIT");
-  Deno.env.set("HB_MOCK_GIT", "false");
-
   // Use a temporary directory
   const tempDir = await Deno.makeTempDir({ prefix: "hb-test-git-" });
   const repoDir = join(tempDir, "repo");
@@ -123,10 +119,6 @@ Deno.test("GitWorktree Integration", async (t) => {
       });
 
   } finally {
-    // Restore env
-    if (originalEnv) Deno.env.set("HB_MOCK_GIT", originalEnv);
-    else Deno.env.delete("HB_MOCK_GIT");
-    
     await Deno.remove(tempDir, { recursive: true });
   }
 });
