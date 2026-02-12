@@ -27,24 +27,40 @@ export async function prepareWorktreeAssets(
   // Locate assets relative to this module
   const assetsDir = join(dirname(fromFileUrl(import.meta.url)), "..", "assets");
 
-  // 1. run.sh
-  const runScriptPath = join(runDir, "run.sh");
-  await copy(join(assetsDir, "run.sh"), runScriptPath, {
-    overwrite: true,
-  });
-  await Deno.chmod(runScriptPath, 0o755);
+  // 1. Copy docker-compose.yml
+  await copy(
+    join(assetsDir, "docker-compose.yml"),
+    join(runDir, "docker-compose.yml"),
+    { overwrite: true },
+  );
 
-  // 2. Dockerfile (if not custom)
-  if (!customDockerfile) {
-    await copy(
-      join(assetsDir, "Dockerfile"),
-      join(runDir, "Dockerfile"),
-      { overwrite: true },
-    );
+  // 2. Dockerfile (if custom or default needs to be available)
+  if (customDockerfile) {
+    await copy(customDockerfile, join(runDir, "Dockerfile"), {
+      overwrite: true,
+    });
   } else {
-    // If custom, copy it to runDir too for consistency? Or just use it?
-    // Let's copy it to runDir so we have a record
-    await copy(customDockerfile, join(runDir, "Dockerfile"), { overwrite: true });
+    // If we want to support building the default Dockerfile, we should copy it.
+    try {
+      await copy(join(assetsDir, "Dockerfile"), join(runDir, "Dockerfile"), {
+        overwrite: true,
+      });
+    } catch {
+      // Ignore if default Dockerfile doesn't exist
+    }
+  }
+
+  // 3. entrypoint.sh
+  try {
+    const entrypointSrc = join(assetsDir, "entrypoint.sh");
+    const entrypointDest = join(runDir, "entrypoint.sh");
+    await copy(entrypointSrc, entrypointDest, {
+      overwrite: true,
+    });
+    await Deno.chmod(entrypointDest, 0o755);
+  } catch (err) {
+    console.error("Failed to copy entrypoint.sh:", err);
+    throw err;
   }
 }
 
@@ -68,99 +84,115 @@ export async function runContainer(
   config: DockerConfig,
   onStart: (id: string) => void,
 ): Promise<void> {
-  // Prepare log files
-  const stdoutPath = join(config.runDir, "stdout.log");
-  const stderrPath = join(config.runDir, "stderr.log");
-  const cidFile = join(config.runDir, "hb.cid");
+  const composeFile = join(config.runDir, "docker-compose.yml");
+  const project = config.name || `hb-${Date.now()}`;
+  const serviceName = "task"; // defined in docker-compose.yml
 
-  // Generate .env file
-  const envContent = Object.entries(config.env)
+  // 1. Prepare Environment Variables
+  // We need to merge config.env with HB_IMAGE and others
+  let imageToUse = config.image;
+
+  if (config.dockerfile) {
+    // Build the image first
+    const tag = `hb-custom-${project}`;
+    await buildImage(config.dockerfile, tag);
+    imageToUse = tag;
+  }
+
+  // Generate .env file for the compose run
+  // We put all config.env into .env, plus HB_IMAGE
+  const envMap = { ...config.env, HB_IMAGE: imageToUse };
+  const envContent = Object.entries(envMap)
     .map(([k, v]) => `${k}=${v}`)
     .join("\n");
   await Deno.writeTextFile(join(config.runDir, ".env"), envContent);
 
-  // Generate docker-compose.yml
-  const volumes = [
-    `${config.hostWorkdir}:${config.workdir}`,
-    ...config.mounts.map((m) => m.replace(/^-v\s+/, "")),
+  // 2. Construct docker compose run command
+  // docker compose -p <project> -f <file> run -d --name <name> ... service [command]
+  
+  const args = [
+    "compose",
+    "-p", project,
+    "-f", composeFile,
+    "run",
+    "-d", // Detached mode
+    "--name", config.name || project,
+    "--workdir", config.workdir,
+    "--user", config.user,
+    // Mount the main worktree
+    "-v", `${config.hostWorkdir}:${config.workdir}`,
+    // Mount entrypoint script
+    "-v", `${join(config.runDir, "entrypoint.sh")}:/entrypoint.sh:ro`,
   ];
 
-  const composeContent = `version: "3.8"
-services:
-  task:
-    container_name: ${config.name || "hb-task"}
-    ${
-      config.dockerfile
-        ? `build:
-      context: .
-      dockerfile: Dockerfile`
-        : `image: ${config.image}`
-    }
-    volumes:
-${volumes.map((v) => `      - "${v}"`).join("\n")}
-    env_file:
-      - .env
-    user: "${config.user}"
-    working_dir: ${config.workdir}
-    network_mode: bridge
-`;
+  // If a custom command is provided, we must override the entrypoint
+  // because entrypoint.sh ignores arguments.
+  if (config.exec.length > 0) {
+    args.push("--entrypoint", "");
+  }
 
-  await Deno.writeTextFile(
-    join(config.runDir, "docker-compose.yml"),
-    composeContent,
-  );
+  // Add extra mounts
+  for (const mount of config.mounts) {
+    const cleanMount = mount.replace(/^-v\s+/, "");
+    args.push("-v", cleanMount);
+  }
 
-  // Construct Environment Variables for run.sh
-  const scriptEnv: Record<string, string> = {
-    HB_PROJECT_NAME: config.name || `hb-${Date.now()}`,
-    HB_CONTAINER_NAME: config.name || "",
-    HB_RUN_DIR: config.runDir,
-    HB_CID_FILE: cidFile,
-  };
+  // Service name and command
+  args.push(serviceName);
+  args.push(...config.exec);
 
-  // Execute run.sh
-  console.log(`Executing Docker script (run.sh) in background...`);
-  const runScript = join(config.runDir, "run.sh");
-  const escapedArgs = config.exec
-    .map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
-    .join(" ");
+  console.log(`Starting container with command: docker ${args.join(" ")}`);
 
-  const cmd = new Deno.Command("sh", {
-    args: [
-      "-c",
-      `nohup "${runScript}" ${escapedArgs} > "${stdoutPath}" 2> "${stderrPath}" < /dev/null &`,
-    ],
-    cwd: config.hostWorkdir,
-    env: scriptEnv,
-    stdout: "null",
-    stderr: "null",
+  const cmd = new Deno.Command("docker", {
+    args,
+    env: Deno.env.toObject(), // Inherit env (PATH etc)
+    stdout: "piped",
+    stderr: "piped",
   });
 
-  const process = cmd.spawn();
-  await process.status;
+  const output = await cmd.output();
 
-  // Wait for CID file to be populated by the script
-  let cid = "";
-  console.log("Waiting for container to start...");
-
-  for (let i = 0; i < 600; i++) {
-    // Wait up to 300s (5m) for image pull etc
-    try {
-      cid = await Deno.readTextFile(cidFile);
-      if (cid.trim()) break;
-    } catch {
-      // wait
-    }
-    await new Promise((r) => setTimeout(r, 500));
+  if (!output.success) {
+    const errorText = new TextDecoder().decode(output.stderr);
+    throw new Error(`Failed to start container: ${errorText}`);
   }
 
-  if (cid.trim()) {
-    onStart(cid.trim());
-  } else {
-    throw new Error(
-      "Timed out waiting for container to start. Check worktree logs.",
-    );
+  // 3. Get Container ID
+  const containerName = config.name || project;
+  
+  const inspectCmd = new Deno.Command("docker", {
+    args: ["inspect", "--format", "{{.Id}}", containerName],
+    stdout: "piped",
+  });
+  const inspectOutput = await inspectCmd.output();
+  
+  if (!inspectOutput.success) {
+     throw new Error(`Container started but failed to inspect ID for ${containerName}`);
   }
+
+  const cid = new TextDecoder().decode(inspectOutput.stdout).trim();
+  console.log(`Container started: ${cid}`);
+  
+  onStart(cid);
+
+  // 4. Capture Logs
+  const stdoutPath = join(config.runDir, "stdout.log");
+  const stderrPath = join(config.runDir, "stderr.log");
+  
+  const stdoutFile = await Deno.open(stdoutPath, { write: true, create: true });
+  const stderrFile = await Deno.open(stderrPath, { write: true, create: true });
+
+  const logsCmd = new Deno.Command("docker", {
+    args: ["logs", "-f", cid],
+    stdout: "piped",
+    stderr: "piped",
+  });
+
+  const logsProcess = logsCmd.spawn();
+  
+  // Pipe streams (don't await, let it run in background)
+  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => {});
+  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => {});
 }
 
 export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
@@ -207,7 +239,6 @@ export async function containerExists(nameOrId: string): Promise<boolean> {
 }
 
 export async function findContainersByPartialName(nameFragment: string): Promise<string[]> {
-  // docker ps -a --filter name=nameFragment --format "{{.Names}}"
   try {
     const cmd = new Deno.Command("docker", {
       args: ["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"],
