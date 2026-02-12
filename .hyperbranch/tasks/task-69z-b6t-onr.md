@@ -26,7 +26,15 @@ TODO:
 	- if the script is running longer than 30sec, halt and output whatever is in the Docker log for this container
 6. Create a deno test script that launches a server and checks connection step-by-step
 
-### **Plan: Create Minimal Sandbox Agent Example**
+## Docs
+
+https://github.com/rivet-dev/sandbox-agent
+
+https://sandboxagent.dev/
+
+https://sandboxagent.dev/docs/llms.txt
+
+## **Plan: Create Minimal Sandbox Agent Example**
 
 We will create a self-contained example in `examples/sandbox-agent/stage1` that demonstrates a running `sandbox-agent` server inside Docker and a Deno client connecting to it.
 
