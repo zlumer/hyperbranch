@@ -3,3 +3,4 @@ _chats
 .hyperbranch/.env
 .hyperbranch/.worktrees
 .hyperbranch/.current-run
+node_modules
