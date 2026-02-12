@@ -73,31 +73,58 @@ export async function runContainer(
   const stderrPath = join(config.runDir, "stderr.log");
   const cidFile = join(config.runDir, "hb.cid");
 
+  // Generate .env file
+  const envContent = Object.entries(config.env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+  await Deno.writeTextFile(join(config.runDir, ".env"), envContent);
+
+  // Generate docker-compose.yml
+  const volumes = [
+    `${config.hostWorkdir}:${config.workdir}`,
+    ...config.mounts.map((m) => m.replace(/^-v\s+/, "")),
+  ];
+
+  const composeContent = `version: "3.8"
+services:
+  task:
+    container_name: ${config.name || "hb-task"}
+    ${
+      config.dockerfile
+        ? `build:
+      context: .
+      dockerfile: Dockerfile`
+        : `image: ${config.image}`
+    }
+    volumes:
+${volumes.map((v) => `      - "${v}"`).join("\n")}
+    env_file:
+      - .env
+    user: "${config.user}"
+    working_dir: ${config.workdir}
+    network_mode: bridge
+`;
+
+  await Deno.writeTextFile(
+    join(config.runDir, "docker-compose.yml"),
+    composeContent,
+  );
+
   // Construct Environment Variables for run.sh
   const scriptEnv: Record<string, string> = {
-    ...config.env, // Pass user envs
-    HB_IMAGE: config.image,
-    HB_NAME: config.name || "",
-    HB_USER: config.user,
+    HB_PROJECT_NAME: config.name || `hb-${Date.now()}`,
+    HB_CONTAINER_NAME: config.name || "",
     HB_RUN_DIR: config.runDir,
     HB_CID_FILE: cidFile,
-    HB_ARGS: [
-      ...config.mounts,
-      ...config.dockerArgs,
-      // Env vars for container are added here
-      ...Object.keys(config.env).map((k) => `-e ${k}`),
-    ].join(" "),
   };
 
-  // We execute `bash run.sh` in detached mode using nohup
-  // This allows the Deno process to exit while the container keeps running
+  // Execute run.sh
   console.log(`Executing Docker script (run.sh) in background...`);
-
   const runScript = join(config.runDir, "run.sh");
-  const escapedArgs = config.exec.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`).join(" ");
+  const escapedArgs = config.exec
+    .map((arg) => `'${arg.replace(/'/g, "'\\''")}'`)
+    .join(" ");
 
-  // Using sh -c to wrap the nohup command
-  // stdout.log and stderr.log are created in the runDir
   const cmd = new Deno.Command("sh", {
     args: [
       "-c",
@@ -110,13 +137,14 @@ export async function runContainer(
   });
 
   const process = cmd.spawn();
-  await process.status; // Wait for the 'spawn' command (nohup) to finish, which is instant
+  await process.status;
 
   // Wait for CID file to be populated by the script
   let cid = "";
   console.log("Waiting for container to start...");
-  
-  for (let i = 0; i < 600; i++) { // Wait up to 300s (5m) for image pull etc
+
+  for (let i = 0; i < 600; i++) {
+    // Wait up to 300s (5m) for image pull etc
     try {
       cid = await Deno.readTextFile(cidFile);
       if (cid.trim()) break;
@@ -129,7 +157,9 @@ export async function runContainer(
   if (cid.trim()) {
     onStart(cid.trim());
   } else {
-    throw new Error("Timed out waiting for container to start. Check worktree logs.");
+    throw new Error(
+      "Timed out waiting for container to start. Check worktree logs.",
+    );
   }
 }
 

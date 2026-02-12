@@ -26,7 +26,7 @@ async function main()
 	await ensureRepo()
 
 	const args = parseArgs(Deno.args, {
-		boolean: ["edit", "sweep", "force", "f"],
+		boolean: ["edit", "sweep", "force", "f", "follow"],
 		string: ["parent", "depends-on", "child-of", "from-status"],
 	})
 
@@ -68,7 +68,7 @@ async function main()
 			console.log("  connect [--depends-on <id>] [--child-of <id>] <task-id>")
 			console.log("  move [--from-status <old>] <task-id> <new-status>")
 			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
-			console.log("  logs <task-id> <run-index>")
+			console.log("  logs <task-id> <run-index> [-f|--follow]")
 			console.log("  stop <task-id>")
 			console.log("  rm <task-id>/<run-id>... | <task-id>... | --sweep")
 			console.log("  ps")

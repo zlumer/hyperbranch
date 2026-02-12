@@ -88,9 +88,9 @@ export async function run(
   let image = options.image ||
     "mcr.microsoft.com/devcontainers/typescript-node:22";
   if (options.dockerfile) {
-    const tag = `hyperbranch-run:${taskId}`;
-    await Docker.buildImage(options.dockerfile, tag);
-    image = tag;
+    // We define the image tag here so that Docker Compose can tag the built image.
+    // The actual build happens in Docker.runContainer via 'docker compose run --build'.
+    image = `hyperbranch-run:${taskId}`;
   }
 
   // 7. Command Construction

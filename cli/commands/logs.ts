@@ -1,7 +1,8 @@
 
 import { Args } from "@std/cli/parse-args";
 import { exists } from "@std/fs/exists";
-import * as Runs from "../services/runs.ts";
+import { join } from "@std/path";
+import * as RunsUtils from "../utils/runs.ts";
 
 export async function logsCommand(args: Args) {
   const taskId = args._[1] as string;
@@ -23,19 +24,34 @@ export async function logsCommand(args: Args) {
   }
 
   try {
-      const logFile = await Runs.getLogsPath(taskId, runIndex);
-      
-      if (!(await exists(logFile))) {
-          console.error(`Log file not found at ${logFile}`);
-          console.error("The task might not have started yet or failed early.");
+      const runDir = await RunsUtils.getRunDir(taskId, runIndex);
+      const cidPath = join(runDir, "hb.cid");
+
+      if (!(await exists(cidPath))) {
+          console.error(`Container ID file not found at ${cidPath}`);
+          console.error("The task might not have started yet, or the run directory is missing.");
           Deno.exit(1);
       }
 
-      console.log(`Tailing logs from ${logFile}...`);
+      const cid = (await Deno.readTextFile(cidPath)).trim();
       
-      // Use tail -f
-      const cmd = new Deno.Command("tail", {
-          args: ["-f", "-n", "100", logFile],
+      if (!cid) {
+          console.error("Container ID file is empty.");
+          Deno.exit(1);
+      }
+
+      const follow = args.f || args.follow;
+      const dockerArgs = ["logs"];
+      if (follow) {
+          dockerArgs.push("-f");
+          console.log(`Streaming logs from container ${cid} (follow mode)...`);
+      } else {
+          console.log(`Fetching logs from container ${cid}...`);
+      }
+      dockerArgs.push(cid);
+
+      const cmd = new Deno.Command("docker", {
+          args: dockerArgs,
           stdout: "inherit",
           stderr: "inherit"
       });
@@ -52,7 +68,16 @@ export async function logsCommand(args: Args) {
           Deno.exit(0);
       });
 
-      await process.status;
+      const status = await process.status;
+      
+      if (!status.success) {
+          // Docker logs might fail if the container is already removed
+          // But usually it exits with 0 if stream ends.
+          // If it exits with non-zero, it means error (e.g. No such container)
+          console.error("Process exited with non-zero status.");
+          console.error("The container might have been cleaned up if the task finished.");
+          Deno.exit(status.code);
+      }
 
   } catch (e) {
       console.error(e instanceof Error ? e.message : String(e));

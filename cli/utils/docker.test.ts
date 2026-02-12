@@ -10,12 +10,11 @@ function mockShellRun(
   envChecks: Record<string, string>,
   output: { stdout: string; stderr: string; code: number },
 ) {
-  // @ts-ignore: Stubbing Deno.Command
   return stub(
     Deno,
     "Command",
     // deno-lint-ignore no-explicit-any
-    (cmd: any, options?: any) => {
+    (cmd: any, options: any) => {
       const args = options?.args || [];
 
       // Update to match: sh -c "nohup ./run.sh ... &"
@@ -33,7 +32,9 @@ function mockShellRun(
 
         // Simulate side effects (CID + logs)
         if (options?.cwd) {
+          // Create hb.cid file to simulate successful start
           Deno.writeTextFileSync(join(options.cwd, "hb.cid"), "mock-cid-script");
+          // Create log files
           Deno.writeTextFileSync(join(options.cwd, "stdout.log"), output.stdout);
           Deno.writeTextFileSync(join(options.cwd, "stderr.log"), output.stderr);
         }
@@ -90,14 +91,15 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
   const cmdStub = mockShellRun(
     ["run.sh"],
     {
-      HB_IMAGE: "test-image",
-      HB_USER: "1000:1000",
+      HB_PROJECT_NAME: "test-project",
+      HB_RUN_DIR: tempDir,
     },
     { stdout: "Script Output", stderr: "", code: 0 },
   );
 
-    const config: Docker.DockerConfig = {
+  const config: Docker.DockerConfig = {
     image: "test-image",
+    name: "test-project",
     exec: ["echo", "hello"],
     workdir: "/app",
     hostWorkdir: tempDir,
@@ -119,6 +121,14 @@ Deno.test("runContainer - executes bash run.sh with envs", async () => {
 
     const stdout = await Deno.readTextFile(join(tempDir, "stdout.log"));
     assertEquals(stdout, "Script Output");
+    
+    // Also verify docker-compose.yml was created
+    const composeFile = join(tempDir, "docker-compose.yml");
+    const composeContent = await Deno.readTextFile(composeFile);
+    if (!composeContent.includes("container_name: test-project")) {
+        throw new Error("docker-compose.yml missing container_name");
+    }
+    
   } finally {
     cmdStub.restore();
     await Deno.remove(tempDir, { recursive: true });

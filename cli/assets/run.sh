@@ -6,88 +6,49 @@ set -e
 
 # Use HB_CID_FILE if provided, else default to hb.cid
 CID_FILE="${HB_CID_FILE:-hb.cid}"
+RUN_DIR="${HB_RUN_DIR:-.}"
 
-# Handle signals to propagate to the container
+# Cleanup on exit
 cleanup() {
-    echo "Caught SIGINT in script"
-    if [ -z "$HB_CID" ] && [ -f "$CID_FILE" ]; then
-        HB_CID=$(cat "$CID_FILE")
+    # Remove container and volumes
+    if [ -n "$HB_PROJECT_NAME" ]; then
+        docker compose -f "$RUN_DIR/docker-compose.yml" -p "$HB_PROJECT_NAME" down -v 2>/dev/null || true
     fi
-    if [ -n "$HB_CID" ]; then
-        docker stop "$HB_CID"
-    fi
-    exit 130
 }
 trap cleanup SIGINT SIGTERM
 
 echo "Starting Docker Container..."
-echo "  Image: $HB_IMAGE"
+echo "  Project: $HB_PROJECT_NAME"
+echo "  Container: $HB_CONTAINER_NAME"
 
-# Determine if we should use -it (Interactive TTY)
-# We only use -it if both stdin (0) and stdout (1) are TTYs.
-# This allows 'hb run' (piped) to work without -it, while manual './run.sh' gets -it.
-DOCKER_FLAGS=""
-if [ -t 0 ] && [ -t 1 ]; then
-    DOCKER_FLAGS="-it"
-fi
+# Run container in detached mode via Docker Compose
+# -d: Detached
+# --name: Explicit container name
+# --remove-orphans: Clean up old containers
+# --service-ports: Map ports defined in compose
+# task: The service name
+# "$@": The command to run (passed from config.exec)
 
-DOCKER_NAME_FLAG=""
-if [ -n "$HB_NAME" ]; then
-    DOCKER_NAME_FLAG="--name $HB_NAME"
-fi
+docker compose \
+    -f "$RUN_DIR/docker-compose.yml" \
+    -p "$HB_PROJECT_NAME" \
+    run \
+    -d \
+    --name "$HB_CONTAINER_NAME" \
+    --remove-orphans \
+    --service-ports \
+    task \
+    "$@"
 
-# Parse HB_ARGS (mounts, envs) into positional parameters to handle quotes correctly
-if [ -n "$HB_ARGS" ]; then
-    eval "set -- $HB_ARGS"
-fi
+# Capture CID
+# We use docker inspect because compose run returns immediately
+HB_CID=$(docker inspect --format "{{.Id}}" "$HB_CONTAINER_NAME")
 
-# Run container in detached mode
-docker run \
-  --detach \
-  --init \
-  $DOCKER_FLAGS \
-  $DOCKER_NAME_FLAG \
-  --cidfile "$CID_FILE" \
-  -w "/app" \
-  -u "$HB_USER" \
-  "$@" \
-  -v "$(pwd):/app" \
-  "$HB_IMAGE" \
-  "$@" > /dev/null
-
-# Wait for container ID
-count=0
-while [ ! -s "$CID_FILE" ]; do
-  sleep 0.1
-  count=$((count+1))
-  if [ $count -gt 50 ]; then
-    echo "Error: Timed out waiting for hb.cid"
+if [ -z "$HB_CID" ]; then
+    echo "Error: Failed to capture Container ID"
     exit 1
-  fi
-done
-
-HB_CID=$(cat "$CID_FILE")
-
-# 1. Logging
-# Start logging in background
-if [ -n "$HB_RUN_DIR" ]; then
-    docker logs -f "$HB_CID" > "$HB_RUN_DIR/docker.log" 2>&1 &
-else
-    docker logs -f "$HB_CID" > "docker.log" 2>&1 &
 fi
-LOG_PID=$!
 
-# 2. Wait for container to finish
-EXIT_CODE=$(docker wait "$HB_CID")
-wait "$LOG_PID"
+echo "$HB_CID" > "$CID_FILE"
+echo "Container started with ID: $HB_CID"
 
-# 3. Auto-Commit and Cleanup
-if [ "$EXIT_CODE" -eq "0" ]; then
-    if [ -n "$HB_TASK_ID" ]; then
-        git add .
-        git commit -m "feat: complete task $HB_TASK_ID"
-    fi
-else
-    echo "Container exited with failure code: $EXIT_CODE"
-    exit "$EXIT_CODE"
-fi
