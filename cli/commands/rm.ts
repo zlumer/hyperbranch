@@ -2,6 +2,7 @@ import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
+import * as GitWorktree from "../utils/git-worktree.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Tasks from "../services/tasks.ts";
 import { WORKTREES_DIR, getRunDir } from "../utils/paths.ts";
@@ -105,7 +106,7 @@ async function sweep() {
 
     // 2. Check Dirty Status
     // If dirty, skip
-    const isDirty = await Git.status(worktreePath);
+    const isDirty = await GitWorktree.status(worktreePath);
     if (isDirty) {
       console.log(`Skipping ${entry.name}: Worktree is dirty (use 'hb rm ${taskId}/${runIndex} -f' to override).`);
       continue;
@@ -153,13 +154,13 @@ async function sweep() {
 
     // Remove Worktree
     try {
-      await Git.removeWorktree(worktreePath, true);
+      await GitWorktree.removeWorktree(worktreePath, true);
     } catch (e) {
       console.warn(`Warning: Failed to remove worktree via git: ${e}`);
       try {
          await Deno.remove(worktreePath, { recursive: true });
          // Prune worktrees immediately to allow branch deletion
-         await Git.git(["worktree", "prune"]); 
+         await GitWorktree.pruneWorktrees(); 
       } catch {}
     }
 
@@ -175,7 +176,7 @@ async function sweep() {
   
   // Prune Git Worktrees
   try {
-     await Git.git(["worktree", "prune"]);
+     await GitWorktree.pruneWorktrees();
   } catch {}
   
   console.log("Sweep complete.");
@@ -400,7 +401,7 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
 
   try {
     if (await exists(worktreePath)) {
-      await Git.removeWorktree(worktreePath, force);
+      await GitWorktree.removeWorktree(worktreePath, force);
     }
   } catch (e) {
     if (!force) throw e;
@@ -408,7 +409,7 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
     console.log("Attempting to force delete directory...");
     await Deno.remove(worktreePath, { recursive: true });
     // Prune worktrees immediately to allow branch deletion
-    await Git.git(["worktree", "prune"]);
+    await GitWorktree.pruneWorktrees();
   }
 
   try {

@@ -11,6 +11,7 @@ export async function git(args: string[], cwd?: string): Promise<string> {
   if (Deno.env.get("HB_MOCK_GIT") === "true") {
     // Return dummy output for common commands if needed
     if (args[0] === "rev-parse" && args[1] === "--abbrev-ref") return "main";
+    if (args[0] === "--version") return "git version 2.39.0"; // Default mock version
     // Mock run branches for listRuns
     if (args[0] === "branch" && args[1] === "--list") {
       if (args[2]?.includes("task/123")) {
@@ -204,27 +205,6 @@ export async function listTaskRunBranches(taskId: string): Promise<string[]> {
   }
 }
 
-export async function getWorktreePath(branch: string): Promise<string | null> {
-  try {
-    const output = await git(["worktree", "list", "--porcelain"]);
-    const lines = output.split("\n");
-    let currentPath = "";
-    for (const line of lines) {
-      if (line.startsWith("worktree ")) {
-        currentPath = line.substring(9);
-      } else if (line.startsWith("branch ")) {
-        const ref = line.substring(7); // ref: refs/heads/branchname or just refs/heads/branchname?
-        // output usually is "branch refs/heads/foo"
-        if (ref === `refs/heads/${branch}`) {
-          return currentPath;
-        }
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 export async function merge(
   branch: string,
@@ -315,23 +295,6 @@ export async function getType(
   }
 }
 
-export async function createWorktree(
-  branch: string,
-  base: string,
-  path: string,
-): Promise<void> {
-  // git worktree add -b <branch> <path> <base>
-  await git(["worktree", "add", "-b", branch, path, base]);
-}
-
-export async function removeWorktree(
-  path: string,
-  force = false,
-): Promise<void> {
-  const args = ["worktree", "remove", path];
-  if (force) args.push("--force");
-  await git(args);
-}
 
 export async function deleteBranch(
   branch: string,
@@ -349,15 +312,3 @@ export async function getUnmergedCommits(
   return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
 }
 
-export async function status(worktreePath: string): Promise<boolean> {
-  // Returns true if the worktree is dirty
-  try {
-    const output = await git(["status", "--porcelain"], worktreePath);
-    return output.trim().length > 0;
-  } catch {
-    // If git status fails (e.g. not a git repo), assume dirty for safety?
-    // Or maybe it's not a valid worktree.
-    // Let's assume dirty to be safe unless we are sure.
-    return true;
-  }
-}

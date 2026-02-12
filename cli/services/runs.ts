@@ -1,5 +1,6 @@
 import { join, resolve } from "@std/path";
 import { exists } from "@std/fs/exists";
+import * as GitWorktree from "../utils/git-worktree.ts";
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
 import * as System from "../utils/system.ts";
@@ -67,7 +68,7 @@ export async function run(
   const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
   const runDir = getRunDirFromWorktree(worktreePath);
 
-  await Git.createWorktree(runBranch, baseBranch, worktreePath);
+  await GitWorktree.createWorktree(runBranch, baseBranch, worktreePath);
 
   // 4. Asset Preparation
   await Docker.prepareWorktreeAssets(worktreePath, runDir, options.dockerfile);
@@ -240,9 +241,9 @@ export async function mergeRun(
   await Git.merge(runId, strategy);
 
   if (cleanup) {
-    const worktreePath = await Git.getWorktreePath(runId);
+    const worktreePath = await GitWorktree.getWorktreePath(runId);
     if (worktreePath) {
-      await Git.removeWorktree(worktreePath, true);
+      await GitWorktree.removeWorktree(worktreePath, true);
     }
     await Git.deleteBranch(runId, true);
   }
