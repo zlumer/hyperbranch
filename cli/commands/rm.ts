@@ -1,6 +1,7 @@
 import { Args } from "@std/cli/parse-args";
 import { resolve, join } from "@std/path";
 import { exists } from "@std/fs/exists";
+import { checkTaskExists } from "../utils/loadTask.ts";
 import * as Git from "../utils/git.ts";
 import * as GitWorktree from "../utils/git-worktree.ts";
 import * as Docker from "../utils/docker.ts";
@@ -247,55 +248,34 @@ async function listCandidates(args: Args) {
 async function removeTask(taskId: string, force: boolean) {
   console.log(`Analyzing task ${taskId}...`);
   
-  // 1. Identify all runs
-  const prefix = getRunBranchPrefix(taskId);
-  let branches: string[] = [];
-  try {
-    const output = await Git.git(["branch", "--list", `${prefix}*`]);
-    branches = output.split("\n")
-      .map(b => b.trim().replace(/^[\*\+]\s+/, ""))
-      .filter(Boolean);
-  } catch {
-    // No branches found
+  // 0. Check Existence
+  const taskExists = await checkTaskExists(taskId);
+
+  let runIndices = new Set<number>();
+
+  // 1. Identify all runs from Branches
+  runIndices = runIndices.union(await identifyBranchRuns(taskId))
+
+  // 2. Identify all runs from Worktrees
+  runIndices = runIndices.union(await identifyWorktreeRuns(taskId))
+
+  // 3. Identify all runs from Containers
+  runIndices = runIndices.union(await identifyContainerRuns(taskId))
+
+  const uniqueIndices = Array.from(runIndices).sort((a, b) => a - b);
+
+  if (!taskExists && uniqueIndices.length === 0) {
+    console.log(`Task ${taskId} not found.`);
+    return;
   }
 
-  // 2. Safety Checks (Atomic)
+  // 4. Safety Checks (Atomic)
   if (!force) {
     const errors: string[] = [];
     
-    // Check Runs
-    for (const branch of branches) {
-       // branch: task/<id>/<idx>
-       const idxStr = branch.split("/").pop();
-       if (!idxStr) continue;
-       
-       const safeBranchName = branch.replace(/\//g, "-");
-       const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
-       
-       if (await exists(worktreePath)) {
-          // Check Active
-          const cidFile = join(getRunDir(worktreePath), "hb.cid");
-          if (await exists(cidFile)) {
-             try {
-               const cid = (await Deno.readTextFile(cidFile)).trim();
-               if (cid) {
-                 const { status } = await Docker.getContainerStatus(cid);
-                 if (status.toLowerCase() === "running") {
-                   errors.push(`Run ${idxStr} is active.`);
-                 }
-               }
-             } catch {}
-          }
-       }
-       
-       // Check Dirty
-       try {
-         const baseBranch = await Git.resolveBaseBranch(taskId);
-         const unmerged = await Git.getUnmergedCommits(branch, baseBranch);
-         if (unmerged.trim().length > 0) {
-           errors.push(`Run ${idxStr} has unmerged commits.`);
-         }
-       } catch {}
+    for (const idx of uniqueIndices) {
+       const runErrors = await checkRunSafety(taskId, idx);
+       errors.push(...runErrors);
     }
 
     if (errors.length > 0) {
@@ -306,20 +286,15 @@ async function removeTask(taskId: string, force: boolean) {
     }
   }
 
-  // 3. Execution
-  console.log(`Removing task ${taskId} and ${branches.length} runs...`);
+  // 5. Execution
+  console.log(`Removing task ${taskId} and ${uniqueIndices.length} runs...`);
   
   // Remove runs
-  for (const branch of branches) {
-      const idxStr = branch.split("/").pop();
-      if (!idxStr) continue;
-      const idx = parseInt(idxStr, 10);
-      
+  for (const idx of uniqueIndices) {
       await removeRun(taskId, idx, true); 
   }
 
   // Remove Task File
-  // REPLACED: Use Tasks.remove(id)
   await Tasks.remove(taskId);
   console.log(`Removed task: ${taskId}`);
 
@@ -334,25 +309,126 @@ async function removeTask(taskId: string, force: boolean) {
   console.log(`✅ Task ${taskId} removed.`);
 }
 
+async function checkRunSafety(taskId: string, idx: number) {
+  const errors: string[] = [];
+  const runBranch = getRunBranchName(taskId, idx);
+  const safeBranchName = runBranch.replace(/\//g, "-");
+  const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
+
+  if (await exists(worktreePath)) {
+    // Check Active
+    const cidFile = join(getRunDir(worktreePath), "hb.cid");
+    if (await exists(cidFile)) {
+      try {
+        const cid = (await Deno.readTextFile(cidFile)).trim();
+        if (cid) {
+          const { status } = await Docker.getContainerStatus(cid);
+          if (status.toLowerCase() === "running") {
+            errors.push(`Run ${idx} is active.`);
+          }
+        }
+      } catch { }
+    }
+  } else {
+    // Check container by name if worktree missing?
+    const containerName = `hb-${taskId}-${idx}`;
+    if (await Docker.containerExists(containerName)) {
+      const { status } = await Docker.getContainerStatus(containerName);
+      if (status.toLowerCase() === "running") {
+        errors.push(`Run ${idx} is active (orphan container).`);
+      }
+    }
+  }
+
+  // Check Dirty
+  try {
+    const baseBranch = await Git.resolveBaseBranch(taskId);
+    // Only check if branch exists
+    if (await Git.branchExists(runBranch)) {
+      const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
+      if (unmerged.trim().length > 0) {
+        errors.push(`Run ${idx} has unmerged commits.`);
+      }
+    }
+  } catch { }
+  return errors
+}
+
+async function identifyContainerRuns(taskId: string) {
+  const runIndices = new Set<number>()
+  const containers = await Docker.findContainersByPartialName(`hb-${taskId}-`);
+  for (const name of containers) {
+    const match = name.match(/^hb-(.+)-(\d+)$/);
+    if (match && match[1] === taskId) {
+      runIndices.add(parseInt(match[2], 10));
+    }
+  }
+  return runIndices
+}
+
+async function identifyWorktreeRuns(taskId: string) {
+  const runIndices = new Set<number>()
+  const worktreesDir = WORKTREES_DIR();
+  if (await exists(worktreesDir)) {
+    for await (const entry of Deno.readDir(worktreesDir)) {
+      if (!entry.isDirectory) continue;
+      const match = entry.name.match(/^task-(.+)-(\d+)$/);
+      if (match && match[1] === taskId) {
+        runIndices.add(parseInt(match[2], 10));
+      }
+    }
+  }
+  return runIndices
+}
+
+async function identifyBranchRuns(taskId: string) {
+  const runIndices = new Set<number>()
+  const prefix = getRunBranchPrefix(taskId);
+  try {
+    const output = await Git.git(["branch", "--list", `${prefix}*`]);
+    output.split("\n")
+      .map(b => b.trim().replace(/^[\*\+]\s+/, ""))
+      .filter(Boolean)
+      .forEach(b => {
+        const idxStr = b.split("/").pop();
+        if (idxStr) runIndices.add(parseInt(idxStr, 10));
+      });
+  } catch {
+    // No branches found
+  }
+  return runIndices
+}
+
 async function removeRun(taskId: string, runIndex: number, force: boolean) {
   const runBranch = getRunBranchName(taskId, runIndex);
   const safeBranchName = runBranch.replace(/\//g, "-");
   const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
+  const containerName = `hb-${taskId}-${runIndex}`;
+
+  // 0. Check Existence
+  const worktreeExists = await exists(worktreePath);
+  const branchExists = await Git.branchExists(runBranch);
+  const containerExists = await Docker.containerExists(containerName);
+
+  if (!worktreeExists && !branchExists && !containerExists) {
+    console.log(`Run ${taskId}/${runIndex} not found.`);
+    return;
+  }
 
   // 1. Check existence
-  if (!(await exists(worktreePath))) {
+  if (!worktreeExists && !containerExists) {
     if (!force) {
        console.warn(`Warning: Worktree not found at ${worktreePath}`);
-       // We proceed to check branch/git status, but can't check local container ID
+       // We proceed to check branch/git status
     }
   }
 
-  const cidFile = join(getRunDir(worktreePath), "hb.cid");
-  let cid = "";
-  if (await exists(cidFile)) {
-    try {
-      cid = (await Deno.readTextFile(cidFile)).trim();
-    } catch {}
+  // Try to get CID from file first
+  let cid = await getCidFromWorktree(worktreePath, worktreeExists, "");
+  
+  // If no CID from file, but container exists by name, use name as CID (commands support name too)
+  if (!cid && containerExists) {
+    cid = containerName;
   }
 
   // 2. Safety Checks (skip if force)
@@ -366,24 +442,20 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
         }
       } catch (e) {
          if (e instanceof Error && e.message.includes("Run is currently active")) throw e;
-         // Warning logged below? Or just ignore validation error and proceed to cleanup?
       }
     }
 
     // B. Check Git Cleanliness
     try {
-      // We need to know what the base branch was. 
-      // If we can't find it, we can't verify merge status.
-      // resolveBaseBranch guesses based on parent.
-      const baseBranch = await Git.resolveBaseBranch(taskId);
-      const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
-      if (unmerged.trim().length > 0) {
-        throw new Error(`Run has unmerged commits:\n${unmerged}\nUse --force to delete anyway.`);
+      if (branchExists) {
+          const baseBranch = await Git.resolveBaseBranch(taskId);
+          const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
+          if (unmerged.trim().length > 0) {
+            throw new Error(`Run has unmerged commits:\n${unmerged}\nUse --force to delete anyway.`);
+          }
       }
     } catch (e) {
-       // If branch lookup fails, it's unsafe to delete
        if (e instanceof Error && e.message.includes("Run has unmerged commits")) throw e;
-       // If branch doesn't exist, we can't delete it anyway (will fail later), so it's safe to proceed.
     }
   }
 
@@ -413,11 +485,23 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
   }
 
   try {
-    await Git.deleteBranch(runBranch, force);
+    if (branchExists) {
+        await Git.deleteBranch(runBranch, force);
+    }
   } catch (e) {
     console.error(`Failed to delete branch ${runBranch}: ${e}`);
     if (!force) throw new Error("Failed to delete branch");
   }
 
   console.log("✅ Run removed.");
+}
+
+async function getCidFromWorktree(worktreePath: string, worktreeExists: boolean, cid: string) {
+  const cidFile = join(getRunDir(worktreePath), "hb.cid");
+  if (worktreeExists && await exists(cidFile)) {
+    try {
+      cid = (await Deno.readTextFile(cidFile)).trim();
+    } catch { }
+  }
+  return cid;
 }

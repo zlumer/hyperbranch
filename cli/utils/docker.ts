@@ -154,7 +154,6 @@ export async function getContainerStatus(cid: string): Promise<{ status: string;
 export async function removeContainer(cid: string, force = false): Promise<void> {
   const args = ["rm", cid];
   if (force) args.splice(1, 0, "-f");
-  
   const cmd = new Deno.Command("docker", {
     args,
     stdout: "null",
@@ -162,6 +161,37 @@ export async function removeContainer(cid: string, force = false): Promise<void>
   });
   await cmd.output();
 }
+
+export async function containerExists(nameOrId: string): Promise<boolean> {
+  try {
+    const cmd = new Deno.Command("docker", {
+      args: ["inspect", "--format", "{{.Id}}", nameOrId],
+      stdout: "null",
+      stderr: "null",
+    });
+    const output = await cmd.output();
+    return output.success;
+  } catch {
+    return false;
+  }
+}
+
+export async function findContainersByPartialName(nameFragment: string): Promise<string[]> {
+  // docker ps -a --filter name=nameFragment --format "{{.Names}}"
+  try {
+    const cmd = new Deno.Command("docker", {
+      args: ["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"],
+      stdout: "piped",
+      stderr: "null",
+    });
+    const output = await cmd.output();
+    if (!output.success) return [];
+    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 
 export async function removeImage(tag: string, force = false): Promise<void> {
   const args = ["rmi", tag];
