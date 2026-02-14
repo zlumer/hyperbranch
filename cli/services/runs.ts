@@ -28,6 +28,75 @@ export interface RunResult {
   containerId: string;
 }
 
+export async function prepareRun(taskId: string, options: RunOptions = {}): Promise<string> {
+	// prepare run:
+	// 1. resolve base branch
+	// 2. create worktree
+	// 3. prepare assets
+	// 4. write docker-compose file
+	// do not launch container or execute anything yet, just prepare everything and return runId
+}
+
+export async function startRun(runId: string, options: RunOptions = {}): Promise<RunResult> {
+	// start run:
+	// 1. find worktree by runId
+	// 2. launch container with docker-compose up (build if dockerfile is provided)
+	// 3. return containerId and save to the `.current-run/cid` file
+}
+
+export async function getRunPort(runId: string): Promise<number> {
+	// helper to get the forwarded port of the run container
+	// 1. find worktree by runId
+	// 2. read the port using `docker container port <containerId>`
+	// 3. return the port number
+}
+
+export async function getRunStatus(runId: string): Promise<string> {
+	// get run status:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. get container status using `docker inspect` or `docker ps`
+	// 4. return status (e.g. "running", "exited", "not found")
+}
+
+export async function getRunLogs(runId: string): Promise<string> {
+	// get run logs:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. get logs using `docker logs <containerId>`
+	// 4. return logs as string
+}
+export async function pauseRun(runId: string): Promise<void> {
+	// pause run:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. pause container using `docker pause`
+}
+
+export async function resumeRun(runId: string): Promise<void> {
+	// resume run:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. resume container using `docker unpause`
+}
+
+export async function stopRun(runId: string): Promise<void> {
+	// stop run:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. stop container using `docker stop`
+}
+
+export async function destroyRun(runId: string): Promise<void> {
+	// stop run:
+	// 1. find worktree by runId
+	// 2. read containerId from `.current-run/cid` file
+	// 3. stop container using `docker stop`
+	// 4. remove container using `docker rm`
+	// 5. optionally remove worktree and branch
+}
+
+
 export async function run(
   taskId: string,
   options: RunOptions = {},
