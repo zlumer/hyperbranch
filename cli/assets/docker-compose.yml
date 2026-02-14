@@ -1,5 +1,8 @@
 version: "3.8"
 services:
   task:
-    image: ${HB_IMAGE:-mcr.microsoft.com/devcontainers/typescript-node:22}
+    dockerfile: Dockerfile
     entrypoint: ["/entrypoint.sh"]
+    env_file: ".env.compose"
+    ports:
+      - "4096"

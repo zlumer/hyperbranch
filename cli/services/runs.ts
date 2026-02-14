@@ -20,6 +20,7 @@ export interface RunOptions {
   exec?: string[];
   env?: Record<string, string>;
   dockerArgs?: string[];
+  prompt?: string;
 }
 
 export interface RunResult {
@@ -71,7 +72,7 @@ export async function run(
   await GitWorktree.createWorktree(runBranch, baseBranch, worktreePath);
 
   // 4. Asset Preparation
-  await Docker.prepareWorktreeAssets(worktreePath, runDir, options.dockerfile);
+  await Docker.prepareWorktreeAssets(runDir);
 
   // 5. Environment Setup
   const mounts = await System.getPackageCacheMounts();
@@ -95,18 +96,18 @@ export async function run(
 
   // 7. Command Construction
   const taskFile = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
-  // Default exec command
-  let execCmd = [
-    "npx",
-    "-y",
-    "opencode-ai",
-    "run",
-    "--file",
-    taskFile,
-    "--",
-    "Please complete this task.",
-  ];
+  Docker.writeEnvComposeFile(runDir, {
+    HYPERBRANCH_TASK_ID: taskId,
+    HYPERBRANCH_TASK_FILE: taskFile,
+    HYPERBRANCH_AGENT_MODE: "build", // hardcoded "build" for now, could be extended to "plan" later
+    HYPERBRANCH_PROMPT: options.prompt || "",
+  });
 
+  // Default exec command
+  // we don't do join() here because it's used inside linux container
+  // all arguments are passed as envs in the docker-compose:
+  // HYPERBRANCH_TASK_ID, HYPERBRANCH_TASK_FILE, HYPERBRANCH_AGENT_MODE
+  let execCmd = [ `./${HYPERBRANCH_DIR}/.current-run/entrypoint.sh` ]
   if (options.exec) {
     execCmd = options.exec;
   }

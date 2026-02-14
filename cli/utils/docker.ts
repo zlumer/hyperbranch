@@ -16,52 +16,38 @@ export interface DockerConfig {
   dockerArgs: string[];
 }
 
+const ASSETS_DIR = join(dirname(fromFileUrl(import.meta.url)), "..", "assets")
+const inAssets = (filename: string): string => join(ASSETS_DIR, filename);
+
+const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
+  copy(overrideSource ?? inAssets(filename), join(destDir, filename), { overwrite: true })
+
 export async function prepareWorktreeAssets(
-  worktreePath: string,
   runDir: string,
-  customDockerfile?: string,
-): Promise<void> {
+  sourcePaths?: {
+    entrypoint?: string,
+    dockerfile?: string,
+    dockerCompose?: string,
+  }
+) {
   // Ensure run directory exists
   await ensureDir(runDir);
 
-  // Locate assets relative to this module
-  const assetsDir = join(dirname(fromFileUrl(import.meta.url)), "..", "assets");
+  await copyAssetWithOverride("docker-compose.yml", runDir, sourcePaths?.dockerCompose)
+  await copyAssetWithOverride("Dockerfile", runDir, sourcePaths?.dockerfile)
+  await copyAssetWithOverride("entrypoint.sh", runDir, sourcePaths?.entrypoint)
 
-  // 1. Copy docker-compose.yml
-  await copy(
-    join(assetsDir, "docker-compose.yml"),
-    join(runDir, "docker-compose.yml"),
-    { overwrite: true },
-  );
-
-  // 2. Dockerfile (if custom or default needs to be available)
-  if (customDockerfile) {
-    await copy(customDockerfile, join(runDir, "Dockerfile"), {
-      overwrite: true,
-    });
-  } else {
-    // If we want to support building the default Dockerfile, we should copy it.
-    try {
-      await copy(join(assetsDir, "Dockerfile"), join(runDir, "Dockerfile"), {
-        overwrite: true,
-      });
-    } catch {
-      // Ignore if default Dockerfile doesn't exist
-    }
-  }
-
-  // 3. entrypoint.sh
-  try {
-    const entrypointSrc = join(assetsDir, "entrypoint.sh");
-    const entrypointDest = join(runDir, "entrypoint.sh");
-    await copy(entrypointSrc, entrypointDest, {
-      overwrite: true,
-    });
-    await Deno.chmod(entrypointDest, 0o755);
-  } catch (err) {
-    console.error("Failed to copy entrypoint.sh:", err);
-    throw err;
-  }
+  // Make entrypoint executable
+  await Deno.chmod(join(runDir, "entrypoint.sh"), 0o755);
+}
+export async function writeEnvComposeFile(
+  runDir: string,
+  env: Record<string, string>,
+) {
+  const envContent = Object.entries(env)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+  await Deno.writeTextFile(join(runDir, ".env.compose"), envContent);
 }
 
 export async function buildImage(
