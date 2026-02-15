@@ -29,90 +29,11 @@ export interface RunResult {
 }
 
 export async function prepareRun(taskId: string, options: RunOptions = {}): Promise<string> {
-	// prepare run:
-	// 1. resolve base branch
-	// 2. create worktree
-	// 3. prepare assets
-	// 4. write docker-compose file
-	// do not launch container or execute anything yet, just prepare everything and return runId
-}
-
-export async function startRun(runId: string, options: RunOptions = {}): Promise<RunResult> {
-	// start run:
-	// 1. find worktree by runId
-	// 2. launch container with docker-compose up (build if dockerfile is provided)
-	// 3. return containerId and save to the `.current-run/cid` file
-}
-
-export async function getRunPort(runId: string): Promise<number> {
-	// helper to get the forwarded port of the run container
-	// 1. find worktree by runId
-	// 2. read the port using `docker container port <containerId>`
-	// 3. return the port number
-}
-
-export async function getRunStatus(runId: string): Promise<string> {
-	// get run status:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. get container status using `docker inspect` or `docker ps`
-	// 4. return status (e.g. "running", "exited", "not found")
-}
-
-export async function getRunLogs(runId: string): Promise<string> {
-	// get run logs:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. get logs using `docker logs <containerId>`
-	// 4. return logs as string
-}
-export async function pauseRun(runId: string): Promise<void> {
-	// pause run:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. pause container using `docker pause`
-}
-
-export async function resumeRun(runId: string): Promise<void> {
-	// resume run:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. resume container using `docker unpause`
-}
-
-export async function stopRun(runId: string): Promise<void> {
-	// stop run:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. stop container using `docker stop`
-}
-
-export async function destroyRun(runId: string): Promise<void> {
-	// stop run:
-	// 1. find worktree by runId
-	// 2. read containerId from `.current-run/cid` file
-	// 3. stop container using `docker stop`
-	// 4. remove container using `docker rm`
-	// 5. optionally remove worktree and branch
-}
-
-
-export async function run(
-  taskId: string,
-  options: RunOptions = {},
-): Promise<RunResult> {
-  // Mocking for tests
   if (Deno.env.get("HB_MOCK_RUNS") === "true") {
-    return {
-      runId: `run/${taskId}/mock`,
-      containerId: "mock-container-id",
-    };
+    return `run/${taskId}/mock`;
   }
 
-  // 1. Configuration
-  const config = await loadConfig();
-
-  // 2. Base Branch Resolution
+  // 1. Resolve Base Branch
   const baseBranch = await Git.resolveBaseBranch(taskId);
 
   // Verify task file exists in base branch
@@ -132,7 +53,7 @@ export async function run(
     );
   }
 
-  // 3. Worktree Preparation
+  // 2. Worktree Preparation
   const runBranch = await Git.getNextRunBranch(taskId);
   const safeBranchName = runBranch.replace(/\//g, "-");
   const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
@@ -140,10 +61,38 @@ export async function run(
 
   await GitWorktree.createWorktree(runBranch, baseBranch, worktreePath);
 
-  // 4. Asset Preparation
+  // 3. Asset Preparation
   await Docker.prepareWorktreeAssets(runDir);
 
-  // 5. Environment Setup
+  // 4. Write .env.compose
+  const taskFile = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
+  await Docker.writeEnvComposeFile(runDir, {
+    HYPERBRANCH_TASK_ID: taskId,
+    HYPERBRANCH_TASK_FILE: taskFile,
+    HYPERBRANCH_AGENT_MODE: "build",
+    HYPERBRANCH_PROMPT: options.prompt || "",
+  });
+
+  return runBranch;
+}
+
+export async function startRun(runId: string, options: RunOptions = {}): Promise<RunResult> {
+  if (Deno.env.get("HB_MOCK_RUNS") === "true") {
+    return {
+      runId,
+      containerId: "mock-container-id",
+    };
+  }
+
+  // 1. Find worktree
+  const worktreePath = await GitWorktree.getWorktreePath(runId);
+  if (!worktreePath) {
+    throw new Error(`Worktree not found for runId: ${runId}`);
+  }
+  const runDir = getRunDirFromWorktree(worktreePath);
+
+  // 2. Configuration & Env
+  const config = await loadConfig();
   const mounts = await System.getPackageCacheMounts();
   mounts.push(await System.getAgentConfigMount());
 
@@ -154,36 +103,27 @@ export async function run(
 
   const user = await System.getUserId();
 
-  // 6. Docker Image Setup
+  // Extract taskId from runId (format: run/<taskId>/<runNum>)
+  const parts = runId.split("/");
+  const taskId = parts.length >= 2 ? parts[1] : "unknown";
+
+  // 3. Docker Image Setup
   let image = options.image ||
     "mcr.microsoft.com/devcontainers/typescript-node:22";
   if (options.dockerfile) {
-    // We define the image tag here so that Docker Compose can tag the built image.
-    // The actual build happens in Docker.runContainer via 'docker compose run --build'.
     image = `hyperbranch-run:${taskId}`;
   }
 
-  // 7. Command Construction
-  const taskFile = join(HYPERBRANCH_DIR, TASKS_DIR_NAME, `task-${taskId}.md`);
-  Docker.writeEnvComposeFile(runDir, {
-    HYPERBRANCH_TASK_ID: taskId,
-    HYPERBRANCH_TASK_FILE: taskFile,
-    HYPERBRANCH_AGENT_MODE: "build", // hardcoded "build" for now, could be extended to "plan" later
-    HYPERBRANCH_PROMPT: options.prompt || "",
-  });
-
-  // Default exec command
-  // we don't do join() here because it's used inside linux container
-  // all arguments are passed as envs in the docker-compose:
-  // HYPERBRANCH_TASK_ID, HYPERBRANCH_TASK_FILE, HYPERBRANCH_AGENT_MODE
-  let execCmd = [ `./${HYPERBRANCH_DIR}/.current-run/entrypoint.sh` ]
+  // 4. Command Construction
+  let execCmd = [ `./${HYPERBRANCH_DIR}/.current-run/entrypoint.sh` ];
   if (options.exec) {
     execCmd = options.exec;
   }
 
+  const safeBranchName = runId.replace(/\//g, "-");
   const dockerConfig: Docker.DockerConfig = {
     image,
-    name: `hb-${taskId}-${safeBranchName.split("-").pop()}`, // hb-<task>-<runIdx>
+    name: `hb-${taskId}-${safeBranchName.split("-").pop()}`,
     dockerfile: options.dockerfile,
     exec: execCmd,
     workdir: "/app",
@@ -198,26 +138,117 @@ export async function run(
     dockerArgs: options.dockerArgs || [],
   };
 
-  // 8. Launch Container
+  // 5. Launch Container
   let containerId = "";
-  try {
-    await Docker.runContainer(dockerConfig, (cid) => {
-      containerId = cid;
-    });
-    return { runId: runBranch, containerId };
-  } catch (e) {
-    throw e;
+  await Docker.runContainer(dockerConfig, (cid) => {
+    containerId = cid;
+  });
+
+  // 6. Write CID to hb.cid
+  await Deno.writeTextFile(join(runDir, "hb.cid"), containerId);
+
+  return { runId, containerId };
+}
+
+async function getRunCid(runId: string): Promise<string> {
+  const worktreePath = await GitWorktree.getWorktreePath(runId);
+  if (!worktreePath) {
+    throw new Error(`Worktree not found for run '${runId}'`);
   }
+  const runDir = getRunDirFromWorktree(worktreePath);
+  const cidPath = join(runDir, "hb.cid");
+  if (!(await exists(cidPath))) {
+    throw new Error(`Container ID file not found for run '${runId}'`);
+  }
+  return (await Deno.readTextFile(cidPath)).trim();
+}
+async function getRunContainer(runId: string): Promise<Docker.DockerContainerProcess> {
+  const cid = await getRunCid(runId)
+  if (!cid) {
+	throw new Error(`No container ID found for run '${runId}'`);
+  }
+  return Docker.DockerContainerProcess.fromCid(cid);
+}
+
+export async function getRunPort(runId: string): Promise<number> {
+  const container = await getRunContainer(runId);
+  const port = await container.getContainerPort(4096);
+  if (port === null) {
+    throw new Error(`Could not determine public port for run ${runId}`);
+  }
+  return port;
+}
+
+export async function getRunStatus(runId: string): Promise<string> {
+  try {
+    const container = await getRunContainer(runId);
+    const { status } = await container.getContainerStatus();
+    return status;
+  } catch {
+    return "not found";
+  }
+}
+
+export async function getRunLogs(runId: string): Promise<string> {
+  const container = await getRunContainer(runId);
+  return await container.getContainerLogs();
+}
+
+export async function pauseRun(runId: string): Promise<void> {
+  const container = await getRunContainer(runId);
+  await container.pause();
+}
+
+export async function resumeRun(runId: string): Promise<void> {
+  const container = await getRunContainer(runId);
+  await container.unpause();
+
+}
+
+export async function stopRun(runId: string): Promise<void> {
+  const container = await getRunContainer(runId);
+  await container.stop();
+}
+
+export async function destroyRun(runId: string): Promise<void> {
+  try {
+    const container = await getRunContainer(runId);
+    // Stop and remove container
+    // Docker.removeContainer removes it (stops if forced)
+    await container.rm(true)
+  } catch (e) {
+    // Container might not exist or CID file missing. 
+    // We proceed to cleanup worktree/branch.
+  }
+
+  const worktreePath = await GitWorktree.getWorktreePath(runId);
+  if (worktreePath) {
+    await GitWorktree.removeWorktree(worktreePath, true);
+  }
+  
+  // Also clean up the branch if it exists
+  if (await Git.branchExists(runId)) {
+    await Git.deleteBranch(runId, true);
+  }
+}
+
+
+export async function run(
+  taskId: string,
+  options: RunOptions = {},
+): Promise<RunResult> {
+  const runId = await prepareRun(taskId, options);
+  return await startRun(runId, options);
 }
 
 export async function stop(taskId: string): Promise<void> {
   if (Deno.env.get("HB_MOCK_RUNS") === "true") {
     return;
   }
-  const cid = await Runs.getContainerId(taskId);
-  if (cid) {
+  const container = await getRunContainer(taskId);
+  if (container) {
     // Force remove (which stops it)
-    await Docker.removeContainer(cid, true);
+    await container.rm(true);
   } else {
     // If we can't find the CID, we can't stop it.
     // Maybe throw or just return? The previous implementation threw error.
@@ -234,11 +265,11 @@ export async function getLogsPath(
   return await Runs.getLogsPath(taskId, runIndex);
 }
 export async function getStatus(taskId: string): Promise<string> {
-  const cid = await Runs.getContainerId(taskId);
-  if (!cid) {
+  const container = await getRunContainer(taskId);
+  if (!container) {
     return "stopped";
   }
-  const { status } = await Docker.getContainerStatus(cid);
+  const { status } = await container.getContainerStatus()
   return status;
 }
 

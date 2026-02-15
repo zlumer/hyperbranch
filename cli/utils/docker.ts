@@ -181,6 +181,23 @@ export async function runContainer(
   logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => {});
 }
 
+export async function getContainerIdByName(name: string): Promise<string | null> {
+  try {
+    const cmd = new Deno.Command("docker", {
+      args: ["inspect", "--format", "{{.Id}}", name],
+      stdout: "piped",
+      stderr: "null",
+    });
+    const output = await cmd.output();
+    if (!output.success)
+      return null;
+    
+    return new TextDecoder().decode(output.stdout).trim();
+  } catch {
+    return null;
+  }
+}
+
 export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
   try {
     const cmd = new Deno.Command("docker", {
@@ -212,12 +229,7 @@ export async function removeContainer(cid: string, force = false): Promise<void>
 
 export async function containerExists(nameOrId: string): Promise<boolean> {
   try {
-    const cmd = new Deno.Command("docker", {
-      args: ["inspect", "--format", "{{.Id}}", nameOrId],
-      stdout: "null",
-      stderr: "null",
-    });
-    const output = await cmd.output();
+    const output = await dcmd(["inspect", "--format", "{{.Id}}", nameOrId], { stdout: "null", stderr: "null" });
     return output.success;
   } catch {
     return false;
@@ -226,16 +238,12 @@ export async function containerExists(nameOrId: string): Promise<boolean> {
 
 export async function findContainersByPartialName(nameFragment: string): Promise<string[]> {
   try {
-    const cmd = new Deno.Command("docker", {
-      args: ["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const output = await cmd.output();
-    if (!output.success) return [];
+    const output = await dcmd(["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"], { stdout: "piped", stderr: "null" });
+    if (!output.success)
+      return []
     return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean);
   } catch {
-    return [];
+    return []
   }
 }
 
@@ -250,4 +258,69 @@ export async function removeImage(tag: string, force = false): Promise<void> {
     stderr: "null",
   });
   await cmd.output();
+}
+
+type stdouterror = "piped" | "inherit" | "null" | undefined
+const dcmd = (args: string[], opts: { cwd?: string, stdout?: stdouterror, stderr?: stdouterror } = {}) => new Deno.Command("docker", {
+  args,
+  cwd: opts.cwd,
+  stdout: opts.stdout,
+  stderr: opts.stderr,
+}).output()
+
+async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
+  const output = await dcmd(["port", cid, internalPort.toString()], { stdout: "piped", stderr: "null" })
+  if (!output.success)
+    return null
+
+  const text = new TextDecoder().decode(output.stdout).trim()
+  if (!text)
+    return null
+
+  const firstLine = text.split("\n")[0];
+  const parts = firstLine.split(":");
+  const portStr = parts[parts.length - 1];
+  const port = parseInt(portStr, 10);
+  return isNaN(port) ? null : port;
+}
+
+export class DockerContainerProcess {
+  constructor(public cid: string) {}
+  static fromCid(cid: string) { return new DockerContainerProcess(cid) }
+  static async fromName(name: string) {
+    const cid = await getContainerIdByName(name);
+    if (!cid) {
+      throw new Error(`No container found with name '${name}'`);
+    }
+    return new DockerContainerProcess(cid);
+  }
+
+  stop() {
+    return dcmd(["stop", this.cid], { stdout: "null", stderr: "inherit" })
+  }
+  pause() {
+    return dcmd(["pause", this.cid], { stdout: "null", stderr: "inherit" })
+  }
+  unpause() {
+    return dcmd(["unpause", this.cid], { stdout: "null", stderr: "inherit" })
+  }
+  rm(force: boolean = false) {
+    return removeContainer(this.cid, force);
+  }
+  getContainerPort(internalPort: number) {
+    return getContainerPort(this.cid, internalPort);
+  }
+  getContainerStatus() {
+    return getContainerStatus(this.cid);
+  }
+  getContainerLogs() {
+    return getContainerLogs(this.cid);
+  }
+}
+
+async function getContainerLogs(cid: string): Promise<string> {
+  const output = await dcmd(["logs", cid], { stdout: "piped", stderr: "piped" });
+  const stdout = new TextDecoder().decode(output.stdout);
+  const stderr = new TextDecoder().decode(output.stderr);
+  return stdout + stderr;
 }
