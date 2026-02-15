@@ -66,7 +66,7 @@ app.post("/:id/run", async (c) => {
 // Stop task
 app.post("/:id/stop", async (c) => {
   const id = c.req.param("id");
-  await Runs.stop(id);
+  await Runs.stopRun(id);
   return c.json({ message: "Task stopped" });
 });
 
@@ -83,7 +83,7 @@ app.get(
         try {
           // Get logs path (this might throw if task/run doesn't exist)
           // We do this inside onOpen so we can send error over WS if needed
-          const logPath = await Runs.getLogsPath(id);
+          const logPath = Runs.getLogsPath(id);
 
           if (!(await exists(logPath))) {
             ws.send(

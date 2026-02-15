@@ -44,7 +44,7 @@ Deno.test("getPackageCacheMounts - detects npm", async () => {
 		await Deno.writeTextFile("package-lock.json", "{}");
 
 		const mounts = await System.getPackageCacheMounts();
-		assertEquals(mounts, [`-v "/mock/npm/cache:/root/.npm"`]);
+		assertEquals(mounts, [["/mock/npm/cache", "/root/.npm"]]);
 	} finally {
 		Deno.chdir(originalCwd);
 		await Deno.remove(tempDir, { recursive: true });
@@ -68,8 +68,8 @@ Deno.test("getPackageCacheMounts - detects multiple", async () => {
 		const mounts = await System.getPackageCacheMounts();
 		assertEquals(mounts.length, 2);
 		assertEquals(mounts, [
-			`-v "/mock/npm/cache:/root/.npm"`,
-			`-v "/mock/yarn/cache:/usr/local/share/.cache/yarn"`
+			["/mock/npm/cache", "/root/.npm"],
+			["/mock/yarn/cache", "/usr/local/share/.cache/yarn"]
 		]);
 	} finally {
 		Deno.chdir(originalCwd);
@@ -96,7 +96,7 @@ Deno.test("getAgentConfigMount - creates dir and returns mount", async () => {
 		assertEquals(stat.isDirectory, true);
 		
 		// Check string
-		assertEquals(mount, `-v "${opencodePath}:/root/.opencode:ro"`);
+		assertEquals(mount, [`${opencodePath}`, `/root/.opencode:ro`]);
 	} finally {
 		envStub.restore();
 		await Deno.remove(tempHome, { recursive: true });

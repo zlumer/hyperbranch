@@ -4,5 +4,9 @@ services:
     dockerfile: Dockerfile
     entrypoint: ["/entrypoint.sh"]
     env_file: ".env.compose"
+    mounts:
+      - type: bind
+        source: ../.. # Bind mount the entire repo
+        target: /app
     ports:
       - "4096"

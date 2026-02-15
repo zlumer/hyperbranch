@@ -15,15 +15,18 @@ async function runCmd(cmd: string[]): Promise<string> {
   return new TextDecoder().decode(output.stdout).trim()
 }
 
-export async function getPackageCacheMounts(): Promise<string[]> {
-  const mounts: string[] = []
+export function convertMountsToCmd(mounts: [host: string, container: string][]): string[] {
+  return mounts.map(([host, container]) => `-v "${host}:${container}"`)
+}
+export async function getPackageCacheMounts(): Promise<[host: string, container: string][]> {
+  const mounts: [string, string][] = []
   const cwd = Deno.cwd()
 
   // NPM
   if (await exists(join(cwd, "package-lock.json"))) {
     try {
       const npmCache = await runCmd(["npm", "config", "get", "cache"])
-      mounts.push(`-v "${npmCache}:/root/.npm"`)
+      mounts.push([npmCache, "/root/.npm"])
     } catch {
       // Ignore if npm not found or fails
     }
@@ -33,7 +36,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   if (await exists(join(cwd, "yarn.lock"))) {
     try {
       const yarnCache = await runCmd(["yarn", "cache", "dir"])
-      mounts.push(`-v "${yarnCache}:/usr/local/share/.cache/yarn"`)
+      mounts.push([yarnCache, "/usr/local/share/.cache/yarn"])
     } catch {
       // Ignore
     }
@@ -43,7 +46,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   if (await exists(join(cwd, "pnpm-lock.yaml"))) {
     try {
       const pnpmStore = await runCmd(["pnpm", "store", "path"])
-      mounts.push(`-v "${pnpmStore}:/root/.local/share/pnpm/store"`)
+      mounts.push([pnpmStore, "/root/.local/share/pnpm/store"])
     } catch {
       // Ignore
     }
@@ -52,7 +55,7 @@ export async function getPackageCacheMounts(): Promise<string[]> {
   return mounts
 }
 
-export async function getAgentConfigMount(): Promise<string> {
+export async function getAgentConfigMount(): Promise<[host: string, container: string]> {
   const home = Deno.env.get("HOME")
   if (!home) {
     throw new Error("HOME environment variable not set")
@@ -63,7 +66,7 @@ export async function getAgentConfigMount(): Promise<string> {
     await Deno.mkdir(opencodeDir, { recursive: true })
   }
   // Read-only mount
-  return `-v "${opencodeDir}:/root/.opencode:ro"`
+  return [opencodeDir, "/root/.opencode:ro"]
 }
 
 export function getEnvVars(keys: string[]): Record<string, string> {

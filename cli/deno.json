@@ -12,6 +12,7 @@
     "@std/testing": "jsr:@std/testing@^1.0.17",
     "@std/toml": "jsr:@std/toml@^1.0.11",
     "@std/yaml": "jsr:@std/yaml@^1.0.11",
-    "hono": "jsr:@hono/hono@^4.6.19"
+    "hono": "jsr:@hono/hono@^4.6.19",
+    "zod": "npm:zod@^4.3.6"
   }
 }

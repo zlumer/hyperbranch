@@ -68,60 +68,60 @@ export async function buildImage(
   }
 }
 
-export async function runContainer(config: DockerConfig): Promise<string> {
-  const composeFile = join(config.runDir, "docker-compose.yml")
-  const project = config.name || `hb-${Date.now()}`
-  const serviceName = "task" // defined in docker-compose.yml
+// export async function runContainer(config: DockerConfig): Promise<string> {
+//   const composeFile = join(config.runDir, "docker-compose.yml")
+//   const project = config.name || `hb-${Date.now()}`
+//   const serviceName = "task" // defined in docker-compose.yml
 
-  // 1. Prepare Environment Variables
-  const imageToUse = config.dockerfile ? await (async () => {
-      const tag = `hb-custom-${project}`
-      await buildImage(config.dockerfile!, tag)
-      return tag
-  })() : config.image
+//   // 1. Prepare Environment Variables
+//   const imageToUse = config.dockerfile ? await (async () => {
+//       const tag = `hb-custom-${project}`
+//       await buildImage(config.dockerfile!, tag)
+//       return tag
+//   })() : config.image
 
-  // Generate .env file for the compose run
-  const envMap = { ...config.env, HB_IMAGE: imageToUse }
-  const envContent = mergeEnvToText(envMap)
+//   // Generate .env file for the compose run
+//   const envMap = { ...config.env, HB_IMAGE: imageToUse }
+//   const envContent = mergeEnvToText(envMap)
   
-  await Deno.writeTextFile(join(config.runDir, ".env"), envContent)
+//   await Deno.writeTextFile(join(config.runDir, ".env"), envContent)
 
-  // 2. Construct docker compose run command
-  const args = createDockerServiceArgs(project, composeFile, config, serviceName)
+//   // 2. Construct docker compose run command
+//   const args = createDockerServiceArgs(project, composeFile, config, serviceName)
 
-  console.log(`Starting container with command: docker ${args.join(" ")}`)
+//   console.log(`Starting container with command: docker ${args.join(" ")}`)
 
-  const output = await dcmd(args, {
-    env: Deno.env.toObject(),
-    stdout: "piped",
-    stderr: "piped",
-  })
+//   const output = await dcmd(args, {
+//     env: Deno.env.toObject(),
+//     stdout: "piped",
+//     stderr: "piped",
+//   })
 
-  if (!output.success) {
-    const errorText = new TextDecoder().decode(output.stderr)
-    throw new Error(`Failed to start container: ${errorText}`)
-  }
+//   if (!output.success) {
+//     const errorText = new TextDecoder().decode(output.stderr)
+//     throw new Error(`Failed to start container: ${errorText}`)
+//   }
 
-  // 3. Get Container ID
-  const containerName = config.name || project
-  const inspectOutput = await dcmd(["inspect", "--format", "{{.Id}}", containerName], {
-      stdout: "piped"
-  })
+//   // 3. Get Container ID
+//   const containerName = config.name || project
+//   const inspectOutput = await dcmd(["inspect", "--format", "{{.Id}}", containerName], {
+//       stdout: "piped"
+//   })
   
-  if (!inspectOutput.success) {
-     throw new Error(`Container started but failed to inspect ID for ${containerName}`)
-  }
+//   if (!inspectOutput.success) {
+//      throw new Error(`Container started but failed to inspect ID for ${containerName}`)
+//   }
 
-  const cid = new TextDecoder().decode(inspectOutput.stdout).trim()
-  console.log(`Container started: ${cid}`)
+//   const cid = new TextDecoder().decode(inspectOutput.stdout).trim()
+//   console.log(`Container started: ${cid}`)
 
-  // 4. Capture Logs
-  const stdoutPath = join(config.runDir, "stdout.log")
-  const stderrPath = join(config.runDir, "stderr.log")
-  await captureLogs(cid, stdoutPath, stderrPath)
+//   // 4. Capture Logs
+//   const stdoutPath = join(config.runDir, "stdout.log")
+//   const stderrPath = join(config.runDir, "stderr.log")
+//   await captureLogs(cid, stdoutPath, stderrPath)
   
-  return cid
-}
+//   return cid
+// }
 
 async function captureLogs(cid: string, stdoutPath: string, stderrPath: string) {
 
@@ -130,8 +130,7 @@ async function captureLogs(cid: string, stdoutPath: string, stderrPath: string) 
     Deno.open(stderrPath, { write: true, create: true })
   ]);
 
-  const logsCmd = new Deno.Command("docker", {
-    args: ["logs", "-f", cid],
+  const logsCmd = dockerCmd(["logs", "-f", cid], {
     stdout: "piped",
     stderr: "piped",
   });
@@ -239,14 +238,17 @@ export async function removeImage(tag: string, force = false): Promise<void> {
 
 type StdoutError = "piped" | "inherit" | "null" | undefined
 
-const dcmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) => 
-    new Deno.Command("docker", {
+export const dockerCmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) =>
+  new Deno.Command("docker", {
         args,
         cwd: opts.cwd,
         stdout: opts.stdout,
         stderr: opts.stderr,
         env: opts.env
-    }).output()
+    })
+
+const dcmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) => 
+    dockerCmd(args, opts).output()
 
 export async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
   const output = await dcmd(["port", cid, internalPort.toString()], { stdout: "piped", stderr: "null" })

@@ -3,9 +3,10 @@ import { exists } from "@std/fs/exists";
 import * as GitWorktree from "../utils/git-worktree.ts";
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
+import * as Compose from "../utils/docker-compose.ts";
 import * as System from "../utils/system.ts";
 import * as Runs from "../utils/runs.ts";
-import { parseRunNumber } from "../utils/branch-naming.ts";
+import { parseRunNumber, splitRunBranchName } from "../utils/branch-naming.ts";
 import { loadConfig } from "../utils/config.ts"; // Assuming this is still needed for env vars
 import {
   getRunDir as getRunDirFromWorktree,
@@ -25,7 +26,6 @@ export interface RunOptions {
 
 export interface RunResult {
   runId: string;
-  containerId: string;
 }
 
 export async function prepareRun(taskId: string, options: RunOptions = {}): Promise<string> {
@@ -55,6 +55,11 @@ export async function prepareRun(taskId: string, options: RunOptions = {}): Prom
   const worktreePath = resolve(WORKTREES_DIR(), safeBranchName);
   const runDir = getRunDirFromWorktree(worktreePath);
 
+  // check if worktree already exists
+  if (await exists(worktreePath)) {
+    throw new Error(`Worktree for run already exists at '${worktreePath}'`)
+  }
+
   await GitWorktree.createWorktree(runBranch, baseBranch, worktreePath);
 
   // 3. Asset Preparation
@@ -72,14 +77,27 @@ export async function prepareRun(taskId: string, options: RunOptions = {}): Prom
   return runBranch;
 }
 
-export async function startRun(runId: string, options: RunOptions = {}): Promise<RunResult> {
-  // 1. Find worktree
+async function runIsAlreadyRunning(runId: string): Promise<boolean> {
   const worktreePath = await GitWorktree.getWorktreePath(runId);
-  if (!worktreePath) {
-    throw new Error(`Worktree not found for runId: ${runId}`);
-  }
-  const runDir = getRunDirFromWorktree(worktreePath);
+  if (!worktreePath)
+    return false;
 
+  const runDir = getRunDirFromWorktree(worktreePath);
+  const composeFile = join(runDir, "docker-compose.yml");
+  if (!(await exists(composeFile)))
+    return false;
+
+  return await Compose.isRunningAny(worktreePath, composeFile);
+}
+
+export async function startRunIdempotent(runId: string): Promise<RunResult> {
+  // if run is already started (CID file exists), we can skip starting and just return existing CID
+  const isRunning = await runIsAlreadyRunning(runId);
+  if (isRunning)
+    return { runId }
+
+  // AI! we need to move this to the `prepare` stage
+  /*
   // 2. Configuration & Env
   const config = await loadConfig();
   const mounts = await System.getPackageCacheMounts();
@@ -89,71 +107,36 @@ export async function startRun(runId: string, options: RunOptions = {}): Promise
   if (options.env) {
     Object.assign(env, options.env);
   }
+  */
 
-  const user = await System.getUserId();
+  // 1. Find worktree
+  const worktreePath = await GitWorktree.getWorktreePath(runId);
+  if (!worktreePath)
+    throw new Error(`Worktree not found for runId: ${runId}`);
+  
+  const runDir = getRunDirFromWorktree(worktreePath);
 
-  // Extract taskId from runId (format: run/<taskId>/<runNum>)
-  const parts = runId.split("/");
-  const taskId = parts.length >= 2 ? parts[1] : "unknown";
+  // 3. Start the container using docker compose
+  await Compose.up(worktreePath, join(runDir, "docker-compose.yml"))
 
-  // 3. Docker Image Setup
-  let image = options.image ||
-    "mcr.microsoft.com/devcontainers/typescript-node:22";
-  if (options.dockerfile) {
-    image = `hyperbranch-run:${taskId}`;
-  }
-
-  // 4. Command Construction
-  let execCmd = [ `./${HYPERBRANCH_DIR}/.current-run/entrypoint.sh` ];
-  if (options.exec) {
-    execCmd = options.exec;
-  }
-
-  const safeBranchName = runId.replace(/\//g, "-");
-  const dockerConfig: Docker.DockerConfig = {
-    image,
-    name: `hb-${taskId}-${safeBranchName.split("-").pop()}`,
-    dockerfile: options.dockerfile,
-    exec: execCmd,
-    workdir: "/app",
-    hostWorkdir: worktreePath,
-    runDir,
-    mounts,
-    env: {
-      ...env,
-      HB_TASK_ID: taskId,
-    },
-    user,
-    dockerArgs: options.dockerArgs || [],
-  };
-
-  // 5. Launch Container
-  const containerId = await Docker.runContainer(dockerConfig);
-
-  // 6. Write CID to hb.cid
-  await Deno.writeTextFile(join(runDir, "hb.cid"), containerId);
-
-  return { runId, containerId };
+  return { runId }
 }
 
 async function getRunCid(runId: string): Promise<string> {
-  const worktreePath = await GitWorktree.getWorktreePath(runId);
-  if (!worktreePath) {
-    throw new Error(`Worktree not found for run '${runId}'`);
-  }
-  const runDir = getRunDirFromWorktree(worktreePath);
-  const cidPath = join(runDir, "hb.cid");
-  if (!(await exists(cidPath))) {
-    throw new Error(`Container ID file not found for run '${runId}'`);
-  }
-  return (await Deno.readTextFile(cidPath)).trim();
+  const runInfo = splitRunBranchName(runId)
+  if (!runInfo)
+    throw new Error(`Invalid runId format: ${runId}`)
+
+  const { taskId, runIndex } = runInfo
+  const cid = await Runs.getContainerId(taskId, runIndex)
+  if (!cid)
+    throw new Error(`No container ID found for run '${runId}'`)
+
+  return cid
 }
+
 async function getRunContainer(runId: string): Promise<Docker.DockerContainerProcess> {
-  const cid = await getRunCid(runId)
-  if (!cid) {
-	throw new Error(`No container ID found for run '${runId}'`);
-  }
-  return Docker.DockerContainerProcess.fromCid(cid);
+  return Docker.DockerContainerProcess.fromCid(await getRunCid(runId))
 }
 
 export async function getRunPort(runId: string): Promise<number> {
@@ -188,7 +171,6 @@ export async function pauseRun(runId: string): Promise<void> {
 export async function resumeRun(runId: string): Promise<void> {
   const container = await getRunContainer(runId);
   await container.unpause();
-
 }
 
 export async function stopRun(runId: string): Promise<void> {
@@ -198,8 +180,9 @@ export async function stopRun(runId: string): Promise<void> {
 
 export async function destroyRun(runId: string): Promise<void> {
   try {
-    const container = await getRunContainer(runId);
+    const container = await getRunContainer(runId)
     // Stop and remove container
+    await container.stop()
     // Docker.removeContainer removes it (stops if forced)
     await container.rm(true)
   } catch (e) {
@@ -218,34 +201,29 @@ export async function destroyRun(runId: string): Promise<void> {
   }
 }
 
+export async function rmCleanRun(runId: string): Promise<void> {
+  const worktreePath = await GitWorktree.getWorktreePath(runId);
+  if (!worktreePath) {
+    throw new Error(`Worktree not found for runId: ${runId}`);
+  }
+}
+
 
 export async function run(
   taskId: string,
   options: RunOptions = {},
 ): Promise<RunResult> {
   const runId = await prepareRun(taskId, options);
-  return await startRun(runId, options);
+  return startRunIdempotent(runId);
 }
 
-export async function stop(taskId: string): Promise<void> {
-  const container = await getRunContainer(taskId);
-  if (container) {
-    // Force remove (which stops it)
-    await container.rm(true);
-  } else {
-    // If we can't find the CID, we can't stop it.
-    // Maybe throw or just return? The previous implementation threw error.
-    // But Runs.getContainerId returns null if not found.
-    // I'll throw to be informative.
-    throw new Error(`No running container found for task ${taskId}`);
-  }
-}
-
-export async function getLogsPath(
-  taskId: string,
-  runIndex?: number,
-): Promise<string> {
-  return await Runs.getLogsPath(taskId, runIndex);
+export function getLogsPath(taskId: string): string
+export function getLogsPath(taskId: string, runIndex: number): string
+export function getLogsPath(taskId: string, runIndex?: number): string
+{
+  if (runIndex === undefined)
+    runIndex = parseRunNumber(taskId) ?? die(`Cannot parse run index from taskId '${taskId}' and no runIndex provided`)
+  return Runs.getLogsPath(taskId, runIndex);
 }
 export async function getStatus(taskId: string): Promise<string> {
   const container = await getRunContainer(taskId);
@@ -256,15 +234,15 @@ export async function getStatus(taskId: string): Promise<string> {
   return status;
 }
 
-export async function getLogsPathFromBranch(
+export function getLogsPathFromBranch(
   taskId: string,
   branchName: string,
-): Promise<string> {
+): string {
   const runIdx = parseRunNumber(branchName);
   if (runIdx === null) {
     throw new Error(`Cannot determine run index from branch '${branchName}'`);
   }
-  return await getLogsPath(taskId, runIdx);
+  return getLogsPath(taskId, runIdx);
 }
 
 export interface RunInfo {
@@ -274,17 +252,21 @@ export interface RunInfo {
   logsPath: string;
 }
 
+function die(...ctorArgs: ConstructorParameters<typeof Error>): never {
+  throw new Error(...ctorArgs)
+}
+
 export async function listRuns(taskId: string): Promise<RunInfo[]> {
   const branches = await Git.listTaskRunBranches(taskId);
   const runs: RunInfo[] = [];
 
   for (const branch of branches) {
-    const runIdx = parseRunNumber(branch);
+    const runIdx = splitRunBranchName(branch)?.runIndex ?? die(`Invalid run branch name: ${branch}`);
     runs.push({
       runId: runIdx !== null ? String(runIdx) : branch,
       branchName: branch,
       status: "unknown",
-      logsPath: await getLogsPath(taskId, runIdx || undefined),
+      logsPath: getLogsPath(taskId, runIdx),
     });
   }
   return runs;

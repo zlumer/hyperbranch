@@ -1,9 +1,11 @@
+export const HB_PREFIX = "hb"
+
 /**
  * Returns the git branch name for a given task ID.
  * @param taskId The ID of the task
  */
 export function getTaskBranchName(taskId: string): string {
-  return `task/${taskId}`;
+  return `${HB_PREFIX}/${taskId}`;
 }
 
 /**
@@ -17,9 +19,23 @@ export function getRunBranchName(taskId: string, runIndex: number): string {
   return `${getRunBranchPrefix(taskId)}${runIndex}`;
 }
 
+export function splitRunBranchName(branchName: string): { taskId: string; runIndex: number } | null {
+  const prefix = `${HB_PREFIX}/`;
+  if (!branchName.startsWith(prefix))
+	return null;
+  const match = branchName.slice(prefix.length).match(/^(.+)\/(\d+)$/)
+  if (!match)
+	return null;
+  const [, taskId, runIndexStr] = match;
+  const runIndex = parseInt(runIndexStr, 10);
+  if (isNaN(runIndex))
+	return null;
+  return { taskId, runIndex };
+}
+
 /**
  * Parses the run number from a branch name.
- * Expected format: task/<taskId>/<index>
+ * Expected format: hb/<taskId>/<index>
  * @param branchName The full branch name
  * @returns The run index or null if parsing fails
  */
