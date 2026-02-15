@@ -1,23 +1,23 @@
-import { dirname, fromFileUrl, join } from "@std/path";
-import { ensureDir } from "@std/fs/ensure-dir";
-import { copy } from "@std/fs/copy";
+import { dirname, fromFileUrl, join } from "@std/path"
+import { ensureDir } from "@std/fs/ensure-dir"
+import { copy } from "@std/fs/copy"
 
 export interface DockerConfig {
-  image: string;
-  name?: string;
-  dockerfile?: string;
-  exec: string[];
-  workdir: string; // The path INSIDE the container (mapped to worktree)
-  hostWorkdir: string; // The path ON HOST (the worktree)
-  runDir: string; // The path ON HOST where run files are stored
-  mounts: string[];
-  env: Record<string, string>;
-  user: string;
-  dockerArgs: string[];
+  image: string
+  name?: string
+  dockerfile?: string
+  exec: string[]
+  workdir: string // The path INSIDE the container (mapped to worktree)
+  hostWorkdir: string // The path ON HOST (the worktree)
+  runDir: string // The path ON HOST where run files are stored
+  mounts: string[]
+  env: Record<string, string>
+  user: string
+  dockerArgs: string[]
 }
 
 const ASSETS_DIR = join(dirname(fromFileUrl(import.meta.url)), "..", "assets")
-const inAssets = (filename: string): string => join(ASSETS_DIR, filename);
+const inAssets = (filename: string): string => join(ASSETS_DIR, filename)
 
 const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
   copy(overrideSource ?? inAssets(filename), join(destDir, filename), { overwrite: true })
@@ -25,44 +25,46 @@ const copyAssetWithOverride = (filename: string, destDir: string, overrideSource
 export async function prepareWorktreeAssets(
   runDir: string,
   sourcePaths?: {
-    entrypoint?: string,
-    dockerfile?: string,
-    dockerCompose?: string,
+    entrypoint?: string
+    dockerfile?: string
+    dockerCompose?: string
   }
 ) {
   // Ensure run directory exists
-  await ensureDir(runDir);
+  await ensureDir(runDir)
 
-  await copyAssetWithOverride("docker-compose.yml", runDir, sourcePaths?.dockerCompose)
-  await copyAssetWithOverride("Dockerfile", runDir, sourcePaths?.dockerfile)
-  await copyAssetWithOverride("entrypoint.sh", runDir, sourcePaths?.entrypoint)
+  await Promise.all([
+    copyAssetWithOverride("docker-compose.yml", runDir, sourcePaths?.dockerCompose),
+    copyAssetWithOverride("Dockerfile", runDir, sourcePaths?.dockerfile),
+    copyAssetWithOverride("entrypoint.sh", runDir, sourcePaths?.entrypoint),
+  ])
 
   // Make entrypoint executable
-  await Deno.chmod(join(runDir, "entrypoint.sh"), 0o755);
+  await Deno.chmod(join(runDir, "entrypoint.sh"), 0o755)
 }
+
 export async function writeEnvComposeFile(
   runDir: string,
   env: Record<string, string>,
 ) {
   const envContent = Object.entries(env)
     .map(([k, v]) => `${k}=${v}`)
-    .join("\n");
-  await Deno.writeTextFile(join(runDir, ".env.compose"), envContent);
+    .join("\n")
+  await Deno.writeTextFile(join(runDir, ".env.compose"), envContent)
 }
 
 export async function buildImage(
   dockerfile: string,
   tag: string,
 ): Promise<void> {
-  console.log(`Building Docker image ${tag} from ${dockerfile}...`);
-  const cmd = new Deno.Command("docker", {
-    args: ["build", "-f", dockerfile, "-t", tag, dirname(dockerfile)],
+  console.log(`Building Docker image ${tag} from ${dockerfile}...`)
+  const output = await dcmd(["build", "-f", dockerfile, "-t", tag, dirname(dockerfile)], {
     stdout: "inherit",
     stderr: "inherit",
-  });
-  const output = await cmd.output();
+  })
+  
   if (!output.success) {
-    throw new Error("Docker build failed");
+    throw new Error("Docker build failed")
   }
 }
 
@@ -70,32 +72,26 @@ export async function runContainer(
   config: DockerConfig,
   onStart: (id: string) => void,
 ): Promise<void> {
-  const composeFile = join(config.runDir, "docker-compose.yml");
-  const project = config.name || `hb-${Date.now()}`;
-  const serviceName = "task"; // defined in docker-compose.yml
+  const composeFile = join(config.runDir, "docker-compose.yml")
+  const project = config.name || `hb-${Date.now()}`
+  const serviceName = "task" // defined in docker-compose.yml
 
   // 1. Prepare Environment Variables
-  // We need to merge config.env with HB_IMAGE and others
-  let imageToUse = config.image;
-
-  if (config.dockerfile) {
-    // Build the image first
-    const tag = `hb-custom-${project}`;
-    await buildImage(config.dockerfile, tag);
-    imageToUse = tag;
-  }
+  const imageToUse = config.dockerfile ? await (async () => {
+      const tag = `hb-custom-${project}`
+      await buildImage(config.dockerfile!, tag)
+      return tag
+  })() : config.image
 
   // Generate .env file for the compose run
-  // We put all config.env into .env, plus HB_IMAGE
-  const envMap = { ...config.env, HB_IMAGE: imageToUse };
+  const envMap = { ...config.env, HB_IMAGE: imageToUse }
   const envContent = Object.entries(envMap)
     .map(([k, v]) => `${k}=${v}`)
-    .join("\n");
-  await Deno.writeTextFile(join(config.runDir, ".env"), envContent);
+    .join("\n")
+  
+  await Deno.writeTextFile(join(config.runDir, ".env"), envContent)
 
   // 2. Construct docker compose run command
-  // docker compose -p <project> -f <file> run -d --name <name> ... service [command]
-  
   const args = [
     "compose",
     "-p", project,
@@ -109,218 +105,211 @@ export async function runContainer(
     "-v", `${config.hostWorkdir}:${config.workdir}`,
     // Mount entrypoint script
     "-v", `${join(config.runDir, "entrypoint.sh")}:/entrypoint.sh:ro`,
-  ];
+    // If a custom command is provided, we must override the entrypoint
+    ...(config.exec.length > 0 ? ["--entrypoint", ""] : []),
+    // Add extra mounts
+    ...config.mounts.flatMap(mount => ["-v", mount.replace(/^-v\s+/, "")]),
+    serviceName,
+    ...config.exec
+  ]
 
-  // If a custom command is provided, we must override the entrypoint
-  // because entrypoint.sh ignores arguments.
-  if (config.exec.length > 0) {
-    args.push("--entrypoint", "");
-  }
+  console.log(`Starting container with command: docker ${args.join(" ")}`)
 
-  // Add extra mounts
-  for (const mount of config.mounts) {
-    const cleanMount = mount.replace(/^-v\s+/, "");
-    args.push("-v", cleanMount);
-  }
-
-  // Service name and command
-  args.push(serviceName);
-  args.push(...config.exec);
-
-  console.log(`Starting container with command: docker ${args.join(" ")}`);
-
-  const cmd = new Deno.Command("docker", {
-    args,
-    env: Deno.env.toObject(), // Inherit env (PATH etc)
+  const output = await dcmd(args, {
+    env: Deno.env.toObject(),
     stdout: "piped",
     stderr: "piped",
-  });
-
-  const output = await cmd.output();
+  })
 
   if (!output.success) {
-    const errorText = new TextDecoder().decode(output.stderr);
-    throw new Error(`Failed to start container: ${errorText}`);
+    const errorText = new TextDecoder().decode(output.stderr)
+    throw new Error(`Failed to start container: ${errorText}`)
   }
 
   // 3. Get Container ID
-  const containerName = config.name || project;
-  
-  const inspectCmd = new Deno.Command("docker", {
-    args: ["inspect", "--format", "{{.Id}}", containerName],
-    stdout: "piped",
-  });
-  const inspectOutput = await inspectCmd.output();
+  const containerName = config.name || project
+  const inspectOutput = await dcmd(["inspect", "--format", "{{.Id}}", containerName], {
+      stdout: "piped"
+  })
   
   if (!inspectOutput.success) {
-     throw new Error(`Container started but failed to inspect ID for ${containerName}`);
+     throw new Error(`Container started but failed to inspect ID for ${containerName}`)
   }
 
-  const cid = new TextDecoder().decode(inspectOutput.stdout).trim();
-  console.log(`Container started: ${cid}`);
+  const cid = new TextDecoder().decode(inspectOutput.stdout).trim()
+  console.log(`Container started: ${cid}`)
   
-  onStart(cid);
+  onStart(cid)
 
   // 4. Capture Logs
-  const stdoutPath = join(config.runDir, "stdout.log");
-  const stderrPath = join(config.runDir, "stderr.log");
+  const stdoutPath = join(config.runDir, "stdout.log")
+  const stderrPath = join(config.runDir, "stderr.log")
   
-  const stdoutFile = await Deno.open(stdoutPath, { write: true, create: true });
-  const stderrFile = await Deno.open(stderrPath, { write: true, create: true });
+  const [stdoutFile, stderrFile] = await Promise.all([
+      Deno.open(stdoutPath, { write: true, create: true }),
+      Deno.open(stderrPath, { write: true, create: true })
+  ])
 
   const logsCmd = new Deno.Command("docker", {
     args: ["logs", "-f", cid],
     stdout: "piped",
     stderr: "piped",
-  });
+  })
 
-  const logsProcess = logsCmd.spawn();
+  const logsProcess = logsCmd.spawn()
   
   // Pipe streams (don't await, let it run in background)
-  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => {});
-  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => {});
+  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => {})
+  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => {})
 }
 
 export async function getContainerIdByName(name: string): Promise<string | null> {
   try {
-    const cmd = new Deno.Command("docker", {
-      args: ["inspect", "--format", "{{.Id}}", name],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const output = await cmd.output();
-    if (!output.success)
-      return null;
+    const output = await dcmd(["inspect", "--format", "{{.Id}}", name], {
+        stdout: "piped",
+        stderr: "null",
+    })
+    if (!output.success) return null
     
-    return new TextDecoder().decode(output.stdout).trim();
+    return new TextDecoder().decode(output.stdout).trim()
   } catch {
-    return null;
+    return null
   }
 }
 
 export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
   try {
-    const cmd = new Deno.Command("docker", {
-      args: ["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}", cid],
-      stdout: "piped",
-      stderr: "null",
-    });
-    const output = await cmd.output();
-    if (!output.success) return { status: "unknown", startedAt: "" };
+    const output = await dcmd(["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}", cid], {
+        stdout: "piped",
+        stderr: "null",
+    })
+    if (!output.success) return { status: "unknown", startedAt: "" }
     
-    const text = new TextDecoder().decode(output.stdout).trim();
-    const [status, startedAt] = text.split("|");
-    return { status, startedAt };
+    const text = new TextDecoder().decode(output.stdout).trim()
+    const [status, startedAt] = text.split("|")
+    return { status, startedAt }
   } catch {
-    return { status: "unknown", startedAt: "" };
+    return { status: "unknown", startedAt: "" }
   }
 }
 
 export async function removeContainer(cid: string, force = false): Promise<void> {
-  const args = ["rm", cid];
-  if (force) args.splice(1, 0, "-f");
-  const cmd = new Deno.Command("docker", {
-    args,
-    stdout: "null",
-    stderr: "null",
-  });
-  await cmd.output();
+  const args = ["rm", cid]
+  if (force) args.splice(1, 0, "-f")
+  await dcmd(args, { stdout: "null", stderr: "null" })
 }
 
 export async function containerExists(nameOrId: string): Promise<boolean> {
   try {
-    const output = await dcmd(["inspect", "--format", "{{.Id}}", nameOrId], { stdout: "null", stderr: "null" });
-    return output.success;
+    const output = await dcmd(["inspect", "--format", "{{.Id}}", nameOrId], { stdout: "null", stderr: "null" })
+    return output.success
   } catch {
-    return false;
+    return false
   }
 }
 
 export async function findContainersByPartialName(nameFragment: string): Promise<string[]> {
   try {
-    const output = await dcmd(["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"], { stdout: "piped", stderr: "null" });
-    if (!output.success)
-      return []
-    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean);
+    const output = await dcmd(["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"], { stdout: "piped", stderr: "null" })
+    if (!output.success) return []
+    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean)
   } catch {
     return []
   }
 }
 
-
 export async function removeImage(tag: string, force = false): Promise<void> {
-  const args = ["rmi", tag];
-  if (force) args.splice(1, 0, "-f");
-
-  const cmd = new Deno.Command("docker", {
-    args,
-    stdout: "null",
-    stderr: "null",
-  });
-  await cmd.output();
+  const args = ["rmi", tag]
+  if (force) args.splice(1, 0, "-f")
+  await dcmd(args, { stdout: "null", stderr: "null" })
 }
 
-type stdouterror = "piped" | "inherit" | "null" | undefined
-const dcmd = (args: string[], opts: { cwd?: string, stdout?: stdouterror, stderr?: stdouterror } = {}) => new Deno.Command("docker", {
-  args,
-  cwd: opts.cwd,
-  stdout: opts.stdout,
-  stderr: opts.stderr,
-}).output()
+// Helpers
 
-async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
+type StdoutError = "piped" | "inherit" | "null" | undefined
+
+const dcmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) => 
+    new Deno.Command("docker", {
+        args,
+        cwd: opts.cwd,
+        stdout: opts.stdout,
+        stderr: opts.stderr,
+        env: opts.env
+    }).output()
+
+export async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
   const output = await dcmd(["port", cid, internalPort.toString()], { stdout: "piped", stderr: "null" })
-  if (!output.success)
-    return null
+  if (!output.success) return null
 
   const text = new TextDecoder().decode(output.stdout).trim()
-  if (!text)
-    return null
+  if (!text) return null
 
-  const firstLine = text.split("\n")[0];
-  const parts = firstLine.split(":");
-  const portStr = parts[parts.length - 1];
-  const port = parseInt(portStr, 10);
-  return isNaN(port) ? null : port;
+  // Format: 80/tcp -> 0.0.0.0:32768
+  const firstLine = text.split("\n")[0]
+  const parts = firstLine.split(":")
+  const portStr = parts[parts.length - 1]
+  const port = parseInt(portStr, 10)
+  return isNaN(port) ? null : port
 }
 
+export async function getContainerLogs(cid: string): Promise<string> {
+  const output = await dcmd(["logs", cid], { stdout: "piped", stderr: "piped" })
+  const stdout = new TextDecoder().decode(output.stdout)
+  const stderr = new TextDecoder().decode(output.stderr)
+  return stdout + stderr
+}
+
+export function stopContainer(cid: string) {
+  return dcmd(["stop", cid], { stdout: "null", stderr: "inherit" })
+}
+
+export function pauseContainer(cid: string) {
+  return dcmd(["pause", cid], { stdout: "null", stderr: "inherit" })
+}
+
+export function unpauseContainer(cid: string) {
+  return dcmd(["unpause", cid], { stdout: "null", stderr: "inherit" })
+}
+
+// Class wrapper for compatibility and convenience
 export class DockerContainerProcess {
   constructor(public cid: string) {}
+  
   static fromCid(cid: string) { return new DockerContainerProcess(cid) }
+  
   static async fromName(name: string) {
-    const cid = await getContainerIdByName(name);
+    const cid = await getContainerIdByName(name)
     if (!cid) {
-      throw new Error(`No container found with name '${name}'`);
+      throw new Error(`No container found with name '${name}'`)
     }
-    return new DockerContainerProcess(cid);
+    return new DockerContainerProcess(cid)
   }
 
   stop() {
-    return dcmd(["stop", this.cid], { stdout: "null", stderr: "inherit" })
+    return stopContainer(this.cid)
   }
+  
   pause() {
-    return dcmd(["pause", this.cid], { stdout: "null", stderr: "inherit" })
+    return pauseContainer(this.cid)
   }
+  
   unpause() {
-    return dcmd(["unpause", this.cid], { stdout: "null", stderr: "inherit" })
+    return unpauseContainer(this.cid)
   }
+  
   rm(force: boolean = false) {
-    return removeContainer(this.cid, force);
+    return removeContainer(this.cid, force)
   }
+  
   getContainerPort(internalPort: number) {
-    return getContainerPort(this.cid, internalPort);
+    return getContainerPort(this.cid, internalPort)
   }
+  
   getContainerStatus() {
-    return getContainerStatus(this.cid);
+    return getContainerStatus(this.cid)
   }
+  
   getContainerLogs() {
-    return getContainerLogs(this.cid);
+    return getContainerLogs(this.cid)
   }
-}
-
-async function getContainerLogs(cid: string): Promise<string> {
-  const output = await dcmd(["logs", cid], { stdout: "piped", stderr: "piped" });
-  const stdout = new TextDecoder().decode(output.stdout);
-  const stderr = new TextDecoder().decode(output.stderr);
-  return stdout + stderr;
 }
