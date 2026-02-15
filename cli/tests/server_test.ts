@@ -10,7 +10,6 @@ if (!Deno.env.get("HB_API_KEY")) {
 // Create a temporary directory for tasks
 const tempDir = await Deno.makeTempDir({ prefix: "hb-test-tasks-" });
 Deno.env.set("HB_TASKS_DIR", tempDir);
-Deno.env.set("HB_MOCK_RUNS", "true");
 
 console.log(`Using temporary tasks directory: ${tempDir}`);
 

@@ -29,10 +29,6 @@ export interface RunResult {
 }
 
 export async function prepareRun(taskId: string, options: RunOptions = {}): Promise<string> {
-  if (Deno.env.get("HB_MOCK_RUNS") === "true") {
-    return `run/${taskId}/mock`;
-  }
-
   // 1. Resolve Base Branch
   const baseBranch = await Git.resolveBaseBranch(taskId);
 
@@ -232,9 +228,6 @@ export async function run(
 }
 
 export async function stop(taskId: string): Promise<void> {
-  if (Deno.env.get("HB_MOCK_RUNS") === "true") {
-    return;
-  }
   const container = await getRunContainer(taskId);
   if (container) {
     // Force remove (which stops it)
