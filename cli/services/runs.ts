@@ -77,13 +77,6 @@ export async function prepareRun(taskId: string, options: RunOptions = {}): Prom
 }
 
 export async function startRun(runId: string, options: RunOptions = {}): Promise<RunResult> {
-  if (Deno.env.get("HB_MOCK_RUNS") === "true") {
-    return {
-      runId,
-      containerId: "mock-container-id",
-    };
-  }
-
   // 1. Find worktree
   const worktreePath = await GitWorktree.getWorktreePath(runId);
   if (!worktreePath) {

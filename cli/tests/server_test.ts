@@ -62,32 +62,6 @@ Deno.test("Server Integration Tests", async (t) => {
         const task = await res.json();
         assertEquals(task.id, createdTaskId);
     });
-
-    await t.step("POST /tasks/:id/run - start a run (mocked)", async () => {
-        const res = await app.request(`/tasks/${createdTaskId}/run`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-API-Key": API_KEY,
-            },
-            body: JSON.stringify({}),
-        });
-        assertEquals(res.status, 200);
-        const result = await res.json();
-        // Since we mocked runs.ts, we expect specific mock data
-        assertEquals(result.runId, `run/${createdTaskId}/mock`);
-        assertEquals(result.containerId, "mock-container-id");
-    });
-
-    await t.step("POST /tasks/:id/stop - stop a run (mocked)", async () => {
-        const res = await app.request(`/tasks/${createdTaskId}/stop`, {
-            method: "POST",
-            headers: { "X-API-Key": API_KEY },
-        });
-        assertEquals(res.status, 200);
-        const json = await res.json();
-        assertEquals(json.message, "Task stopped");
-    });
     
     // Cleanup
     await Deno.remove(tempDir, { recursive: true });
