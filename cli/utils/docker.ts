@@ -17,10 +17,10 @@ export interface DockerConfig {
 }
 
 const ASSETS_DIR = join(dirname(fromFileUrl(import.meta.url)), "..", "assets")
-const inAssets = (filename: string): string => join(ASSETS_DIR, filename)
+const fromAssets = (filename: string): string => join(ASSETS_DIR, filename)
 
 const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
-  copy(overrideSource ?? inAssets(filename), join(destDir, filename), { overwrite: true })
+  copy(overrideSource ?? fromAssets(filename), join(destDir, filename), { overwrite: true })
 
 export async function prepareWorktreeAssets(
   runDir: string,
