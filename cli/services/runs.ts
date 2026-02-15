@@ -139,10 +139,7 @@ export async function startRun(runId: string, options: RunOptions = {}): Promise
   };
 
   // 5. Launch Container
-  let containerId = "";
-  await Docker.runContainer(dockerConfig, (cid) => {
-    containerId = cid;
-  });
+  const containerId = await Docker.runContainer(dockerConfig);
 
   // 6. Write CID to hb.cid
   await Deno.writeTextFile(join(runDir, "hb.cid"), containerId);

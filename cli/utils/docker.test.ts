@@ -95,10 +95,7 @@ Deno.test("runContainer - executes docker compose run", async () => {
       dockerArgs: [],
     };
 
-    let capturedCid = "";
-    await Docker.runContainer(config, (c) => {
-      capturedCid = c;
-    });
+    const capturedCid = await Docker.runContainer(config);
 
     assertEquals(capturedCid, cid);
     

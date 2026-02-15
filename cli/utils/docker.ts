@@ -68,10 +68,7 @@ export async function buildImage(
   }
 }
 
-export async function runContainer(
-  config: DockerConfig,
-  onStart: (id: string) => void,
-): Promise<void> {
+export async function runContainer(config: DockerConfig): Promise<string> {
   const composeFile = join(config.runDir, "docker-compose.yml")
   const project = config.name || `hb-${Date.now()}`
   const serviceName = "task" // defined in docker-compose.yml
@@ -85,33 +82,12 @@ export async function runContainer(
 
   // Generate .env file for the compose run
   const envMap = { ...config.env, HB_IMAGE: imageToUse }
-  const envContent = Object.entries(envMap)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n")
+  const envContent = mergeEnvToText(envMap)
   
   await Deno.writeTextFile(join(config.runDir, ".env"), envContent)
 
   // 2. Construct docker compose run command
-  const args = [
-    "compose",
-    "-p", project,
-    "-f", composeFile,
-    "run",
-    "-d", // Detached mode
-    "--name", config.name || project,
-    "--workdir", config.workdir,
-    "--user", config.user,
-    // Mount the main worktree
-    "-v", `${config.hostWorkdir}:${config.workdir}`,
-    // Mount entrypoint script
-    "-v", `${join(config.runDir, "entrypoint.sh")}:/entrypoint.sh:ro`,
-    // If a custom command is provided, we must override the entrypoint
-    ...(config.exec.length > 0 ? ["--entrypoint", ""] : []),
-    // Add extra mounts
-    ...config.mounts.flatMap(mount => ["-v", mount.replace(/^-v\s+/, "")]),
-    serviceName,
-    ...config.exec
-  ]
+  const args = createDockerServiceArgs(project, composeFile, config, serviceName)
 
   console.log(`Starting container with command: docker ${args.join(" ")}`)
 
@@ -138,29 +114,64 @@ export async function runContainer(
 
   const cid = new TextDecoder().decode(inspectOutput.stdout).trim()
   console.log(`Container started: ${cid}`)
-  
-  onStart(cid)
 
   // 4. Capture Logs
   const stdoutPath = join(config.runDir, "stdout.log")
   const stderrPath = join(config.runDir, "stderr.log")
+  await captureLogs(cid, stdoutPath, stderrPath)
   
+  return cid
+}
+
+async function captureLogs(cid: string, stdoutPath: string, stderrPath: string) {
+
   const [stdoutFile, stderrFile] = await Promise.all([
-      Deno.open(stdoutPath, { write: true, create: true }),
-      Deno.open(stderrPath, { write: true, create: true })
-  ])
+    Deno.open(stdoutPath, { write: true, create: true }),
+    Deno.open(stderrPath, { write: true, create: true })
+  ]);
 
   const logsCmd = new Deno.Command("docker", {
     args: ["logs", "-f", cid],
     stdout: "piped",
     stderr: "piped",
-  })
+  });
 
-  const logsProcess = logsCmd.spawn()
-  
+  const logsProcess = logsCmd.spawn();
+
   // Pipe streams (don't await, let it run in background)
-  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => {})
-  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => {})
+  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => { });
+  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => { });
+}
+
+function mergeEnvToText(envMap: Record<string, string>): string {
+  return Object.entries(envMap)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+}
+
+function createDockerServiceArgs(project: string, composeFile: string, config: DockerConfig, serviceName: string) {
+  const overrideEntrypoint = config.exec.length > 0 ? ["--entrypoint", ""] : [];
+  const mounts = config.mounts.flatMap(mount => ["-v", mount.replace(/^-v\s+/, "")]);
+  return [
+    "compose",
+    "-p", project,
+    "-f", composeFile,
+    "run",
+    "-d", // Detached mode
+    "--name", config.name || project,
+    "--workdir", config.workdir,
+    "--user", config.user,
+    // Mount the main worktree
+    "-v", `${config.hostWorkdir}:${config.workdir}`,
+    // Mount entrypoint script
+    "-v", `${join(config.runDir, "entrypoint.sh")}:/entrypoint.sh:ro`,
+    // If a custom command is provided, we must override the entrypoint
+    ...overrideEntrypoint,
+    // Add extra mounts
+    ...mounts,
+    serviceName,
+    ...config.exec
+  ];
 }
 
 export async function getContainerIdByName(name: string): Promise<string | null> {
