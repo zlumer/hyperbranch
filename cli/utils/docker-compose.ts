@@ -67,16 +67,32 @@ export function logs(workdir: string, composeFilePath: string, projectName?: str
 
 export async function isRunningService(workdir: string, composeFilePath: string, serviceName = DEFAULT_SERVICE_NAME, projectName?: string): Promise<boolean> {
   const cmd = composeCmd(["ps", "-q", serviceName], workdir, composeFilePath, projectName);
-  const output = await cmd.output();
-  const containerId = new TextDecoder().decode(output.stdout).trim();
-  return containerId.length > 0;
+  try {
+    const output = await cmd.output();
+    const containerId = new TextDecoder().decode(output.stdout).trim();
+    return containerId.length > 0;
+  } catch (e) {
+    // If working directory is missing, it's definitely not running there
+    if (e instanceof Deno.errors.NotFound) {
+      return false;
+    }
+    throw e;
+  }
 }
 
 export async function isRunningAny(workdir: string, composeFilePath: string, projectName?: string): Promise<boolean> {
   const cmd = composeCmd(["ps", "-q"], workdir, composeFilePath, projectName);
-  const output = await cmd.output();
-  const containerIds = new TextDecoder().decode(output.stdout).trim().split("\n").filter(line => line.length > 0);
-  return containerIds.length > 0;
+  try {
+    const output = await cmd.output();
+    const containerIds = new TextDecoder().decode(output.stdout).trim().split("\n").filter(line => line.length > 0);
+    return containerIds.length > 0;
+  } catch (e) {
+    // If working directory is missing, it's definitely not running there
+    if (e instanceof Deno.errors.NotFound) {
+      return false;
+    }
+    throw e;
+  }
 }
 
 export async function getServicePort(workdir: string, composeFilePath: string, serviceName: string, containerPort: number, projectName?: string): Promise<number> {
