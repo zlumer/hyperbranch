@@ -65,15 +65,36 @@ export function logs(workdir: string, composeFilePath: string, projectName?: str
   return cmd.spawn();
 }
 
+export async function isServiceRunningInProject(projectName: string, serviceName: string): Promise<boolean> {
+  const cmd = dockerCmd([
+    "compose",
+    "-p", projectName,
+    "ps",
+    "-q",
+    "--status", "running",
+    serviceName
+  ], {
+    stdout: "piped",
+    stderr: "piped"
+  });
+  const output = await cmd.output();
+  const containerId = new TextDecoder().decode(output.stdout).trim();
+  return containerId.length > 0;
+}
+
 export async function isRunningService(workdir: string, composeFilePath: string, serviceName = DEFAULT_SERVICE_NAME, projectName?: string): Promise<boolean> {
-  const cmd = composeCmd(["ps", "-q", serviceName], workdir, composeFilePath, projectName);
+  const cmd = composeCmd(["ps", "-q", "--status", "running", serviceName], workdir, composeFilePath, projectName);
   try {
     const output = await cmd.output();
     const containerId = new TextDecoder().decode(output.stdout).trim();
     return containerId.length > 0;
   } catch (e) {
-    // If working directory is missing, it's definitely not running there
+    // If working directory is missing, it's definitely not running there via compose
+    // But if we have a project name, we can check if there are containers for it
     if (e instanceof Deno.errors.NotFound) {
+      if (projectName) {
+        return isServiceRunningInProject(projectName, serviceName);
+      }
       return false;
     }
     throw e;
