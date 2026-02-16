@@ -128,7 +128,7 @@ export async function listCandidates() {
       continue
 
     const candidate = await checkDir(entry.name, worktreesDir)
-    if (!candidate)
+    if (candidate.type !== "ready")
       continue
     
     console.log(`- ${candidate.taskId}/${candidate.runIndex}`);
@@ -142,10 +142,17 @@ export async function listCandidates() {
   }
 }
 
-async function checkDir(dir: string, worktreesDir: string): Promise<{ taskId: string, runIndex: number } | undefined> {
+type Candidate = { taskId: string, runIndex: number }
+type DirStatus = { type: "invalid_name" }
+  | { type: "active" } & Candidate
+  | { type: "dirty" } & Candidate
+  | { type: "not_merged" } & Candidate
+  | { type: "ready" } & Candidate
+
+async function checkDir(dir: string, worktreesDir: string): Promise<DirStatus> {
   const match = dir.match(/^hb-(.+)-(\d+)$/);
   if (!match)
-    return undefined
+    return { type: "invalid_name" }
 
   const taskId = match[1];
   const runIndex = parseInt(match[2], 10);
@@ -154,19 +161,19 @@ async function checkDir(dir: string, worktreesDir: string): Promise<{ taskId: st
   // Check Active
   const status = await Runs.getStatus(runId);
   if (status.toLowerCase() === "running")
-    return undefined
+    return { type: "active", taskId, runIndex }
 
   // Check Dirty
   const worktreePath = join(worktreesDir, dir);
   const isDirty = await GitWorktree.status(worktreePath);
   if (isDirty)
-    return undefined
+    return { type: "dirty", taskId, runIndex }
 
   // Check Merged
   if (!await isMerged(runId, taskId))
-    return undefined
+    return { type: "not_merged", taskId, runIndex }
 
-  return { taskId, runIndex }
+  return { type: "ready", taskId, runIndex }
 }
 
 async function isMerged(runBranch: string, taskId: string) {
