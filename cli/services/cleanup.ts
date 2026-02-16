@@ -20,7 +20,7 @@ export async function sweep() {
     if (!entry.isDirectory) continue;
     
     // Expect hb-<taskId>-<runIndex>
-    const match = entry.name.match(/^hb-(.+)-(\d+)$/);
+    const match = entry.name.match(/^(hb|task)-(.+)-(\d+)$/);
     if (!match) continue;
 
     const taskId = match[1];

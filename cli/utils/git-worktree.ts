@@ -129,7 +129,22 @@ async function rewriteWorktreePathsToRelative(worktreePath: string): Promise<voi
 export async function removeWorktree(path: string, force = false, cwd?: string): Promise<void> {
   const args = ["worktree", "remove", path];
   if (force) args.push("--force");
-  await git(args, cwd);
+  
+  try {
+    await git(args, cwd);
+  } catch (e: unknown) {
+    const err = e instanceof Error ? e : new Error(String(e));
+    // If force is true and the error is "not a working tree", we can just remove the dir
+    if (force && (err.message.includes("not a working tree") || err.message.includes("does not exist"))) {
+        if (await exists(path)) {
+            await Deno.remove(path, { recursive: true });
+        }
+        // Also prune to be safe, as metadata might be stale
+        await pruneWorktrees();
+        return;
+    }
+    throw err;
+  }
 }
 
 /**
