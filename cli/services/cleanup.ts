@@ -124,39 +124,14 @@ export async function listCandidates() {
   let found = false;
 
   for await (const entry of Deno.readDir(worktreesDir)) {
-    if (!entry.isDirectory) continue;
+    if (!entry.isDirectory)
+      continue
 
-    const match = entry.name.match(/^hb-(.+)-(\d+)$/);
-    if (!match) continue;
-
-    const taskId = match[1];
-    const runIndex = parseInt(match[2], 10);
-    const runId = getRunBranchName(taskId, runIndex);
-
-    // Check Active
-    const status = await Runs.getStatus(runId);
-    if (status.toLowerCase() === "running") {
-      continue;
-    }
-
-    // Check Dirty
-    const worktreePath = join(worktreesDir, entry.name);
-    const isDirty = await GitWorktree.status(worktreePath);
-    if (isDirty) {
-      continue;
-    }
-
-    // Check Merged
-    const runBranch = runId;
-    if (await Git.branchExists(runBranch)) {
-      const baseBranch = await Git.resolveBaseBranch(taskId);
-      const isMerged = await Git.isBranchMerged(runBranch, baseBranch);
-      if (!isMerged) {
-        continue;
-      }
-    }
-
-    console.log(`- ${taskId}/${runIndex} (merged, inactive)`);
+    const candidate = await checkDir(entry.name, worktreesDir)
+    if (!candidate)
+      continue
+    
+    console.log(`- ${candidate.taskId}/${candidate.runIndex}`);
     found = true;
   }
 
@@ -165,4 +140,39 @@ export async function listCandidates() {
   } else {
     console.log("\nRun 'hb rm --sweep' to remove these items.");
   }
+}
+
+async function checkDir(dir: string, worktreesDir: string): Promise<{ taskId: string, runIndex: number } | undefined> {
+  const match = dir.match(/^hb-(.+)-(\d+)$/);
+  if (!match)
+    return undefined
+
+  const taskId = match[1];
+  const runIndex = parseInt(match[2], 10);
+  const runId = getRunBranchName(taskId, runIndex);
+
+  // Check Active
+  const status = await Runs.getStatus(runId);
+  if (status.toLowerCase() === "running")
+    return undefined
+
+  // Check Dirty
+  const worktreePath = join(worktreesDir, dir);
+  const isDirty = await GitWorktree.status(worktreePath);
+  if (isDirty)
+    return undefined
+
+  // Check Merged
+  if (!await isMerged(runId, taskId))
+    return undefined
+
+  return { taskId, runIndex }
+}
+
+async function isMerged(runBranch: string, taskId: string) {
+  if (!(await Git.branchExists(runBranch)))
+    return false
+
+  const baseBranch = await Git.resolveBaseBranch(taskId);
+  return Git.isBranchMerged(runBranch, baseBranch);
 }
