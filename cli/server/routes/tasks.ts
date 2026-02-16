@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { upgradeWebSocket } from "hono/deno";
-import { exists } from "@std/fs/exists";
 import * as Tasks from "../../services/tasks.ts";
 import * as Runs from "../../services/runs.ts";
 import { getRunBranchName } from "../../utils/branch-naming.ts";
@@ -38,11 +37,7 @@ app.get("/:id", async (c) => {
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
-  // Valid fields for update are in TaskFile['frontmatter'] + body
-  // The service expects { body?: string, ...frontmatter }
   await Tasks.update(id, body);
-
-  // Return updated task
   const updated = await Tasks.get(id);
   return c.json(updated);
 });
@@ -57,7 +52,7 @@ app.delete("/:id", async (c) => {
 // Run task
 app.post("/:id/run", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json().catch(() => ({})); // Optional body
+  const body = await c.req.json().catch(() => ({})); 
 
   const result = await Runs.run(id, body);
   return c.json(result);
@@ -66,65 +61,74 @@ app.post("/:id/run", async (c) => {
 // Stop task
 app.post("/:id/stop", async (c) => {
   const id = c.req.param("id");
-  await Runs.stopRun(id);
-  return c.json({ message: "Task stopped" });
+  // Check if id is taskId or runId. 
+  // Runs.stopRun expects runId.
+  // If id is taskId, stop latest? Or maybe we require runId?
+  // Previous implementation used Runs.stopRun(id).
+  // If id is taskId, stopRun needs to handle it.
+  // But Runs.stopRun calls parseRunId which fails if not branch format.
+  
+  // Let's assume if id is taskId, we find latest run.
+  let runId = id;
+  const latest = await Runs.getLatestRunId(id);
+  if (latest) {
+      runId = latest;
+  }
+  
+  try {
+    await Runs.stopRun(runId);
+    return c.json({ message: "Task stopped" });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
 });
 
-// WebSocket Logs
-app.get(
-  "/:id/logs",
-  upgradeWebSocket((c) => {
-    const id = c.req.param("id");
+function createLogStreamHandler(getRunId: (c: any) => Promise<string | null>) {
+  return upgradeWebSocket((c) => {
     let child: Deno.ChildProcess | null = null;
     let killed = false;
 
     return {
       onOpen: async (_evt, ws) => {
         try {
-          // Get logs path (this might throw if task/run doesn't exist)
-          // We do this inside onOpen so we can send error over WS if needed
-          const logPath = Runs.getLogsPath(id);
-
-          if (!(await exists(logPath))) {
-            ws.send(
-              JSON.stringify({ error: `Log file not found: ${logPath}` }),
-            );
-            ws.close();
-            return;
+          const runId = await getRunId(c);
+          if (!runId) {
+             ws.send(JSON.stringify({ error: "Run not found" }));
+             ws.close();
+             return;
           }
 
-          const cmd = new Deno.Command("tail", {
-            args: ["-f", "-n", "+1", logPath],
-            stdout: "piped",
-            stderr: "piped",
-          });
-
-          child = cmd.spawn();
-
-          // Stream stdout
-          (async () => {
-            const stdout = child?.stdout;
-            if (!stdout) return;
-
-            const decoder = new TextDecoder();
-            for await (const chunk of stdout) {
-              if (killed) break;
-              const text = decoder.decode(chunk);
-              // Split by newline to send lines
-              const lines = text.split("\n");
-              for (const line of lines) {
-                // Only send non-empty lines or send all?
-                // "tail" output might be buffered.
-                // Requirement: "Send lines as { data: string }"
-                if (line) {
-                  ws.send(JSON.stringify({ data: line }));
-                }
+          // Start log stream
+          child = await Runs.getLogsStream(runId, true); // follow=true
+          
+          const pipeStream = async (stream: ReadableStream<Uint8Array>) => {
+              const decoder = new TextDecoder();
+              for await (const chunk of stream) {
+                  if (killed) break;
+                  const text = decoder.decode(chunk);
+                  const lines = text.split("\n");
+                  for (const line of lines) {
+                      if (line) {
+                          ws.send(JSON.stringify({ data: line }));
+                      }
+                  }
               }
-            }
-          })();
+          };
 
-          // Stream stderr too? Usually logs are in stdout/stderr redirected to file.
-          // If we tail the file, we get what's in the file.
+          // Pipe both stdout and stderr
+          if (child.stdout) pipeStream(child.stdout).catch(() => {});
+          if (child.stderr) pipeStream(child.stderr).catch(() => {});
+          
+          // Wait for exit?
+          // If we await status, we block onOpen? No, it's async.
+          const status = await child.status;
+          if (!killed) {
+             if (!status.success) {
+                 ws.send(JSON.stringify({ error: `Log process exited with code ${status.code}` }));
+             }
+             ws.close();
+          }
+
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           ws.send(JSON.stringify({ error: msg }));
@@ -135,14 +139,24 @@ app.get(
         killed = true;
         if (child) {
           try {
-            child.kill();
+            child.kill(); 
           } catch {
             // ignore if already dead
           }
         }
       },
     };
-  }),
+  });
+}
+
+// WebSocket Logs
+app.get(
+  "/:id/logs",
+  createLogStreamHandler(async (c) => {
+      const id = c.req.param("id");
+      // Try to find latest run for task
+      return await Runs.getLatestRunId(id);
+  })
 );
 
 // List runs
@@ -194,70 +208,15 @@ app.post("/:id/runs/:runId/merge", async (c) => {
 // WebSocket Logs for specific run
 app.get(
   "/:id/runs/:runId/logs",
-  upgradeWebSocket((c) => {
-    const id = c.req.param("id");
-    const runId = c.req.param("runId");
-
-    let branch = runId;
-    if (!isNaN(Number(runId))) {
-      branch = getRunBranchName(id, Number(runId));
-    }
-
-    let child: Deno.ChildProcess | null = null;
-    let killed = false;
-
-    return {
-      onOpen: async (_evt, ws) => {
-        try {
-          const logPath = await Runs.getLogsPathFromBranch(id, branch);
-
-          if (!(await exists(logPath))) {
-            ws.send(
-              JSON.stringify({ error: `Log file not found: ${logPath}` }),
-            );
-            ws.close();
-            return;
-          }
-
-          const cmd = new Deno.Command("tail", {
-            args: ["-f", "-n", "+1", logPath],
-            stdout: "piped",
-            stderr: "piped",
-          });
-
-          child = cmd.spawn();
-
-          (async () => {
-            const stdout = child?.stdout;
-            if (!stdout) return;
-            const decoder = new TextDecoder();
-            for await (const chunk of stdout) {
-              if (killed) break;
-              const text = decoder.decode(chunk);
-              const lines = text.split("\n");
-              for (const line of lines) {
-                if (line) {
-                  ws.send(JSON.stringify({ data: line }));
-                }
-              }
-            }
-          })();
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          ws.send(JSON.stringify({ error: msg }));
-          ws.close();
-        }
-      },
-      onClose: () => {
-        killed = true;
-        if (child) {
-          try {
-            child.kill();
-          } catch {}
-        }
-      },
-    };
-  }),
+  createLogStreamHandler(async (c) => {
+      const id = c.req.param("id");
+      const runId = c.req.param("runId");
+      let branch = runId;
+      if (!isNaN(Number(runId))) {
+        branch = getRunBranchName(id, Number(runId));
+      }
+      return branch;
+  })
 );
 
 export default app;

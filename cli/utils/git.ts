@@ -281,3 +281,11 @@ export async function getUnmergedCommits(
   // Returns commits in branch that are not in base
   return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
 }
+
+export async function getConfig(key: string): Promise<string | null> {
+  try {
+    return await git(["config", "--get", key]);
+  } catch {
+    return null;
+  }
+}

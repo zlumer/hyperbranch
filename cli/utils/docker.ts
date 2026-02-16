@@ -68,110 +68,23 @@ export async function buildImage(
   }
 }
 
-// export async function runContainer(config: DockerConfig): Promise<string> {
-//   const composeFile = join(config.runDir, "docker-compose.yml")
-//   const project = config.name || `hb-${Date.now()}`
-//   const serviceName = "task" // defined in docker-compose.yml
-
-//   // 1. Prepare Environment Variables
-//   const imageToUse = config.dockerfile ? await (async () => {
-//       const tag = `hb-custom-${project}`
-//       await buildImage(config.dockerfile!, tag)
-//       return tag
-//   })() : config.image
-
-//   // Generate .env file for the compose run
-//   const envMap = { ...config.env, HB_IMAGE: imageToUse }
-//   const envContent = mergeEnvToText(envMap)
-  
-//   await Deno.writeTextFile(join(config.runDir, ".env"), envContent)
-
-//   // 2. Construct docker compose run command
-//   const args = createDockerServiceArgs(project, composeFile, config, serviceName)
-
-//   console.log(`Starting container with command: docker ${args.join(" ")}`)
-
-//   const output = await dcmd(args, {
-//     env: Deno.env.toObject(),
-//     stdout: "piped",
-//     stderr: "piped",
-//   })
-
-//   if (!output.success) {
-//     const errorText = new TextDecoder().decode(output.stderr)
-//     throw new Error(`Failed to start container: ${errorText}`)
-//   }
-
-//   // 3. Get Container ID
-//   const containerName = config.name || project
-//   const inspectOutput = await dcmd(["inspect", "--format", "{{.Id}}", containerName], {
-//       stdout: "piped"
-//   })
-  
-//   if (!inspectOutput.success) {
-//      throw new Error(`Container started but failed to inspect ID for ${containerName}`)
-//   }
-
-//   const cid = new TextDecoder().decode(inspectOutput.stdout).trim()
-//   console.log(`Container started: ${cid}`)
-
-//   // 4. Capture Logs
-//   const stdoutPath = join(config.runDir, "stdout.log")
-//   const stderrPath = join(config.runDir, "stderr.log")
-//   await captureLogs(cid, stdoutPath, stderrPath)
-  
-//   return cid
-// }
-
-async function captureLogs(cid: string, stdoutPath: string, stderrPath: string) {
-
-  const [stdoutFile, stderrFile] = await Promise.all([
-    Deno.open(stdoutPath, { write: true, create: true }),
-    Deno.open(stderrPath, { write: true, create: true })
-  ]);
-
-  const logsCmd = dockerCmd(["logs", "-f", cid], {
-    stdout: "piped",
-    stderr: "piped",
-  });
-
-  const logsProcess = logsCmd.spawn();
-
-  // Pipe streams (don't await, let it run in background)
-  logsProcess.stdout.pipeTo(stdoutFile.writable).catch(() => { });
-  logsProcess.stderr.pipeTo(stderrFile.writable).catch(() => { });
+export async function getUserId(): Promise<string> {
+  if (Deno.build.os === "linux") {
+    try {
+      const uidProcess = new Deno.Command("id", { args: ["-u"] })
+      const gidProcess = new Deno.Command("id", { args: ["-g"] })
+      const uid = new TextDecoder().decode((await uidProcess.output()).stdout)
+        .trim()
+      const gid = new TextDecoder().decode((await gidProcess.output()).stdout)
+        .trim()
+      return `${uid}:${gid}`
+    } catch {
+      console.warn("Failed to detect UID/GID, defaulting to 'node' user.")
+    }
+  }
+  return "node"
 }
 
-function mergeEnvToText(envMap: Record<string, string>): string {
-  return Object.entries(envMap)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n");
-}
-
-function createDockerServiceArgs(project: string, composeFile: string, config: DockerConfig, serviceName: string) {
-  const overrideEntrypoint = config.exec.length > 0 ? ["--entrypoint", ""] : [];
-  const mounts = config.mounts.flatMap(mount => ["-v", mount.replace(/^-v\s+/, "")]);
-  return [
-    "compose",
-    "-p", project,
-    "-f", composeFile,
-    "run",
-    "-d", // Detached mode
-    "--name", config.name || project,
-    "--workdir", config.workdir,
-    "--user", config.user,
-    // Mount the main worktree
-    "-v", `${config.hostWorkdir}:${config.workdir}`,
-    // Mount entrypoint script
-    "-v", `${join(config.runDir, "entrypoint.sh")}:/entrypoint.sh:ro`,
-    // If a custom command is provided, we must override the entrypoint
-    ...overrideEntrypoint,
-    // Add extra mounts
-    ...mounts,
-    serviceName,
-    ...config.exec
-  ];
-}
 
 export async function getContainerIdByName(name: string): Promise<string | null> {
   try {
@@ -226,6 +139,20 @@ export async function findContainersByPartialName(nameFragment: string): Promise
   } catch {
     return []
   }
+}
+
+export async function findNetworksByPartialName(nameFragment: string): Promise<string[]> {
+  try {
+    const output = await dcmd(["network", "ls", "--filter", `name=${nameFragment}`, "--format", "{{.Name}}"], { stdout: "piped", stderr: "null" })
+    if (!output.success) return []
+    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+export async function removeNetwork(name: string): Promise<void> {
+  await dcmd(["network", "rm", name], { stdout: "null", stderr: "null" })
 }
 
 export async function removeImage(tag: string, force = false): Promise<void> {

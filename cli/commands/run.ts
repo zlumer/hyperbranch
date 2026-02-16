@@ -13,7 +13,7 @@ export async function runCommand(args: Args) {
   const options: Runs.RunOptions = {
     image: args["image"] as string,
     dockerfile: args["dockerfile"] as string,
-    dockerArgs: (args["docker-args"] as string)?.split(" ").filter(Boolean),
+    // dockerArgs: (args["docker-args"] as string)?.split(" ").filter(Boolean), // Not supported in Compose mode easily
   };
 
   if (args["exec"]) {
@@ -24,29 +24,18 @@ export async function runCommand(args: Args) {
   }
 
   try {
-    const { runId } = await Runs.run(taskId, options);
+    const { runId, port } = await Runs.run(taskId, options);
     
-    // Runs.run already logs success messages
-    console.log(`Run ID: ${runId}`);
-    
-    // Attempt to show where logs are
-    try {
-        const logsPath = await Runs.getLogsPath(taskId);
-        console.log(`Logs available in: ${logsPath}`);
-    } catch {
-        // Ignore if we can't find logs path immediately
+    console.log(`Run Started: ${runId}`);
+    if (port > 0) {
+      console.log(`Access URL: http://localhost:${port}`);
     }
     
-    console.log(`Use 'hb logs ${taskId}' to view output.`);
+    console.log(`Use 'hb logs ${runId}' to view output.`);
 
   } catch (e) {
-    // Runs.run already logs error details to console.error?
-    // Looking at Runs.run implementation:
-    // console.error(`\n❌ Execution Failed:`);
-    // console.error(e instanceof Error ? e.message : String(e));
-    // throw e;
-    
-    // So we just need to exit.
+    console.error(`\n❌ Execution Failed:`);
+    console.error(e instanceof Error ? e.message : String(e));
     Deno.exit(1);
   }
 }
