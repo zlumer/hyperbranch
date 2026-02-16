@@ -1,7 +1,7 @@
 import * as Git from "../utils/git.ts";
 import * as Lifecycle from "../runtime/lifecycle.ts";
 import { getRunContext } from "../runtime/context.ts";
-import { parseRunNumber, splitRunBranchName } from "../utils/branch-naming.ts";
+import { parseRunNumber, splitRunBranchName, getRunBranchName as parseRunBranchName } from "../utils/branch-naming.ts";
 
 export interface RunOptions extends Lifecycle.PrepareOptions {}
 
@@ -43,6 +43,32 @@ export async function destroyRun(runId: string): Promise<void> {
   const { taskId, runIndex } = parseRunId(runId);
   const ctx = getRunContext(taskId, runIndex);
   await Lifecycle.destroy(ctx);
+}
+
+export async function removeRun(taskId: string, runIndex: number, force: boolean): Promise<void> {
+  const runId = parseRunBranchName(taskId, runIndex);
+  
+  // Safety checks
+  if (!force) {
+    const status = await getStatus(runId);
+    if (status.toLowerCase() === "running") {
+       throw new Error(`Run ${taskId}/${runIndex} is active (${status}). Use --force to remove.`);
+    }
+
+    // Check Git Cleanliness
+    const runBranch = runId;
+    if (await Git.branchExists(runBranch)) {
+        const baseBranch = await Git.resolveBaseBranch(taskId);
+        const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
+        if (unmerged.trim().length > 0) {
+            throw new Error(`Run has unmerged commits:\n${unmerged}\nUse --force to delete anyway.`);
+        }
+    }
+  }
+
+  console.log(`Removing run ${taskId}/${runIndex}...`);
+  await destroyRun(runId);
+  console.log("✅ Run removed.");
 }
 
 export async function getStatus(runId: string): Promise<string> {
