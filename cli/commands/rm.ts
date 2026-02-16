@@ -58,6 +58,7 @@ export async function rmCommand(args: Args) {
   }
 }
 
+// AI! move to service and break into shorter functions if needed
 async function removeRun(taskId: string, runIndex: number, force: boolean) {
   const runId = getRunBranchName(taskId, runIndex);
   
@@ -85,6 +86,7 @@ async function removeRun(taskId: string, runIndex: number, force: boolean) {
   console.log("✅ Run removed.");
 }
 
+// AI! move to service and break into shorter functions if needed
 async function sweep() {
   const worktreesDir = WORKTREES_DIR();
   if (!(await exists(worktreesDir))) {
@@ -140,6 +142,7 @@ async function sweep() {
   console.log("Sweep complete.");
 }
 
+// AI! move to service and break into shorter functions if needed
 async function deepSweep() {
   console.log("Performing deep sweep of Docker resources...");
   
@@ -192,6 +195,7 @@ async function deepSweep() {
   }
 }
 
+//AI: implement
 async function listCandidates(args: Args) {
   // Logic to list candidates based on same criteria as sweep
   // Simplified for brevity, reuse sweep logic or iterate similar to sweep
@@ -199,6 +203,7 @@ async function listCandidates(args: Args) {
   // ... (Can be implemented similarly to sweep but just printing)
 }
 
+//AI! move to service
 async function removeTask(taskId: string, force: boolean) {
   console.log(`Analyzing task ${taskId}...`);
   
