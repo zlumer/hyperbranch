@@ -175,3 +175,23 @@ export async function logs(ctx: RunContext, follow: boolean = false): Promise<De
    // This returns the process so the caller can pipe stdout/stderr
    return Compose.logs(ctx.paths.runDir, ctx.paths.composeFile, ctx.dockerProjectName, follow);
 }
+
+
+export async function getHostPort(ctx: RunContext, containerPort: number): Promise<number> {
+  const isRunning = await Compose.isRunningAny(ctx.paths.runDir, ctx.paths.composeFile, ctx.dockerProjectName);
+  if (!isRunning) {
+    throw new Error(`Run '${ctx.branchName}' is not running`);
+  }
+
+  try {
+    return await Compose.getServiceHostPort(
+      ctx.paths.runDir, 
+      ctx.paths.composeFile, 
+      "task", 
+      containerPort,
+      ctx.dockerProjectName
+    );
+  } catch (e) {
+    throw new Error(`Port ${containerPort} is not opened`);
+  }
+}

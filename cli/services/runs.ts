@@ -150,7 +150,7 @@ export async function mergeRun(
 
 // Helpers
 
-function parseRunId(runId: string): { taskId: string; runIndex: number } {
+export function parseRunId(runId: string): { taskId: string; runIndex: number } {
   const info = splitRunBranchName(runId);
   if (!info) {
     // Maybe it's just a branch name passed as ID?
@@ -170,4 +170,16 @@ export async function getLogsStream(runId: string, follow: boolean): Promise<Den
 
 export async function getLatestRunId(taskId: string): Promise<string | null> {
   return await Git.getLatestRunBranch(taskId);
+}
+
+export async function getHostPort(runId: string, containerPort: number): Promise<number> {
+  const { taskId, runIndex } = parseRunId(runId);
+  const ctx = getRunContext(taskId, runIndex);
+
+  // Check if branch exists
+  if (!(await Git.branchExists(ctx.branchName))) {
+    throw new Error(`Run ID '${runId}' does not exist`);
+  }
+
+  return await Lifecycle.getHostPort(ctx, containerPort);
 }
