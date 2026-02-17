@@ -6,12 +6,19 @@ export const DockerComposeSchema = z.object({
 		build: z.object({
 			context: z.string(),
 			dockerfile: z.string(),
-			mounts: z.array(z.string()).optional(),
 		}).optional(),
 
 		image: z.string().optional(),
 		ports: z.array(z.string()).optional(),
 		environment: z.record(z.string(), z.string()).optional(),
+
+		command: z.array(z.string()).optional(),
+		env_file: z.string().optional(),
+		volumes: z.array(z.object({
+			type: z.string(),
+			source: z.string(),
+			target: z.string(),
+		})).optional(),
 	}))
 })
 

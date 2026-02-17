@@ -1,10 +1,12 @@
 version: "3.8"
 services:
   task:
-    dockerfile: Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
     entrypoint: ["/entrypoint.sh"]
     env_file: ".env.compose"
-    mounts:
+    volumes:
       - type: bind
         source: ../.. # Bind mount the entire repo
         target: /app
