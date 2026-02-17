@@ -19,11 +19,10 @@ export function addDockerCacheMounts(compose: string, mounts: Mounts, serviceNam
     throw new Error(`Service '${serviceName}' not found in compose file`)
 
   if (service.build) {
-    service.build.mounts = service.build.mounts || []
+    service.volumes = service.volumes || []
     for (const [host, container] of mounts) {
-      const mountStr = `type=bind,source=${host},target=${container}`
-      if (!service.build.mounts.includes(mountStr))
-        service.build.mounts.push(mountStr)
+		// TODO: check for duplicates before adding
+      service.volumes.push({ type: "bind", source: host, target: container })
     }
   }
   return stringify(parsed)
