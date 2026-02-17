@@ -1,11 +1,12 @@
 import { parseArgs } from "@std/cli/parse-args"
 import * as Tasks from "../services/tasks.ts"
 import { TaskStatus } from "../types.ts"
+import { stripHbPrefix } from "../utils/branch-naming.ts"
 
 export async function moveCommand(args: ReturnType<typeof parseArgs>)
 {
-	const taskId = args._[1] as string
-	const target = args._[2] as string
+	const taskId = stripHbPrefix(args._[1] as string)
+	const target = stripHbPrefix(args._[2] as string)
 	const fromStatus = args["from-status"] as string | undefined
 
 	const VALID_STATUSES = ["todo", "plan", "build", "review", "done", "cancelled"]

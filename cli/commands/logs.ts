@@ -1,13 +1,13 @@
 import { Args } from "@std/cli/parse-args";
 import * as Git from "../utils/git.ts";
 import * as Runs from "../services/runs.ts";
-import { getRunBranchName, splitRunBranchName } from "../utils/branch-naming.ts";
+import { getRunBranchName, splitRunBranchName, stripHbPrefix } from "../utils/branch-naming.ts";
 
 export async function logsCommand(args: Args) {
-  const taskId = args._[1] as string;
+  const taskIdOrRunId = args._[1] as string;
   const runArg = args._[2];
 
-  if (!taskId) {
+  if (!taskIdOrRunId) {
     console.error("Error: Task ID is required.");
     console.error("Usage: hb logs <task-id> <run-index>");
     Deno.exit(1);
@@ -16,25 +16,29 @@ export async function logsCommand(args: Args) {
   let runId: string;
 
   // Check if the first argument is already a full run ID (e.g. hb/task/1)
-  const runInfo = splitRunBranchName(taskId);
+  const runInfo = splitRunBranchName(taskIdOrRunId);
 
   if (runInfo) {
-    runId = taskId;
-  } else if (runArg) {
-    const runIndex = parseInt(String(runArg), 10);
-    if (isNaN(runIndex)) {
-      console.error(`Invalid run index: ${runArg}`);
-      Deno.exit(1);
-    }
-    runId = getRunBranchName(taskId, runIndex);
+    runId = taskIdOrRunId;
   } else {
-    // Determine latest run
-    const latest = await Git.getLatestRunBranch(taskId);
-    if (!latest) {
-        console.error(`No runs found for task '${taskId}'`);
+    // Treat as task ID
+    const taskId = stripHbPrefix(taskIdOrRunId);
+    if (runArg) {
+      const runIndex = parseInt(String(runArg), 10);
+      if (isNaN(runIndex)) {
+        console.error(`Invalid run index: ${runArg}`);
         Deno.exit(1);
+      }
+      runId = getRunBranchName(taskId, runIndex);
+    } else {
+      // Determine latest run
+      const latest = await Git.getLatestRunBranch(taskId);
+      if (!latest) {
+          console.error(`No runs found for task '${taskId}'`);
+          Deno.exit(1);
+      }
+      runId = latest;
     }
-    runId = latest;
   }
 
   const follow = args.f || args.follow;

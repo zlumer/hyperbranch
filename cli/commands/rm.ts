@@ -3,8 +3,11 @@ import * as Tasks from "../services/tasks.ts";
 import * as Runs from "../services/runs.ts";
 import * as Cleanup from "../services/cleanup.ts";
 
+import { stripHbPrefix } from "../utils/branch-naming.ts";
+
 export async function rmCommand(args: Args) {
-  const targets = args._.slice(1).map(String);
+  const rawTargets = args._.slice(1).map(String);
+  const targets = rawTargets.map(stripHbPrefix);
   const force = args.force || args.f || false;
 
   if (args.sweep) {

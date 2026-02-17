@@ -239,3 +239,45 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
     env.teardown();
   }
 });
+
+Deno.test("hb rm <hb/task/run> - remove inactive run with prefix", async () => {
+  const env = setupTestEnv();
+  const { runDir, dotCurrentRun } = await env.createRun("123", 1);
+  
+  const cmdStub = mockCmd({
+    // Check Status (docker compose ps -q)
+    [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 ps -q`]: 
+        { success: true, stdout: "" }, // Empty = not running
+
+    // Check Unmerged
+    "git rev-parse --verify hb/123/1": { success: true },
+    "git rev-parse --verify main": { success: true }, // Base branch
+    "git log hb/123/1 ^main --oneline": { success: true, stdout: "" }, // Clean
+
+    // Destroy: Down
+    [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: 
+        { success: true },
+
+    // Destroy: Remove Worktree
+    [`git worktree remove ${runDir} --force`]: { success: true },
+
+    // Destroy: Delete Branch
+    "git branch -D hb/123/1": { success: true },
+    
+    // Resolve base branch
+    "git rev-parse --verify hb/123": { success: false }, 
+    
+    // Worktree Prune Logic
+    "git rev-parse --git-common-dir": { success: true, stdout: ".git" },
+    "git worktree prune": { success: true },
+  });
+
+  try {
+    const args = parseArgs(["rm", "hb/123/1"]);
+    await rmCommand(args);
+  } finally {
+    cmdStub.restore();
+    env.teardown();
+  }
+});
+

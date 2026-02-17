@@ -1,9 +1,10 @@
 import { Args } from "@std/cli/parse-args";
 import * as Runs from "../services/runs.ts";
 import { parseArgsString } from "../utils/args.ts";
+import { stripHbPrefix } from "../utils/branch-naming.ts";
 
 export async function runCommand(args: Args) {
-  const taskId = args._[1] as string;
+  const taskId = stripHbPrefix(args._[1] as string);
   if (!taskId) {
     console.error("Error: Task ID is required.");
     console.error("Usage: hb run <task-id> [options]");

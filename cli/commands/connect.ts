@@ -1,12 +1,16 @@
 import { parseArgs } from "@std/cli/parse-args"
 import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts"
 import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts"
+import { stripHbPrefix } from "../utils/branch-naming.ts"
 
 export async function connectCommand(args: ReturnType<typeof parseArgs>)
 {
-	const taskId = args._[1] as string
-	const dependsOn = args["depends-on"] as string | undefined
-	const childOf = args["child-of"] as string | undefined
+	const taskId = stripHbPrefix(args._[1] as string)
+	const dependsOnRaw = args["depends-on"] as string | undefined
+	const childOfRaw = args["child-of"] as string | undefined
+
+	const dependsOn = dependsOnRaw ? stripHbPrefix(dependsOnRaw) : undefined
+	const childOf = childOfRaw ? stripHbPrefix(childOfRaw) : undefined
 
 	if (!taskId)
 	{

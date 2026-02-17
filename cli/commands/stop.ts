@@ -1,10 +1,10 @@
 import { Args } from "@std/cli/parse-args";
 import * as Runs from "../services/runs.ts";
 import * as Git from "../utils/git.ts";
-import { getRunBranchName } from "../utils/branch-naming.ts";
+import { getRunBranchName, stripHbPrefix } from "../utils/branch-naming.ts";
 
 export async function stopCommand(args: Args) {
-  const taskId = args._[1] as string;
+  const taskId = stripHbPrefix(args._[1] as string);
   const runArg = args._[2];
 
   if (!taskId) {

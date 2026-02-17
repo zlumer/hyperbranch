@@ -1,6 +1,17 @@
 export const HB_PREFIX = "hb"
 
 /**
+ * Removes the hb/ prefix from a task or run ID if present.
+ * @param id The ID to strip
+ */
+export function stripHbPrefix(id: string): string {
+  if (id.startsWith(`${HB_PREFIX}/`)) {
+    return id.slice(HB_PREFIX.length + 1);
+  }
+  return id;
+}
+
+/**
  * Returns the git branch name for a given task ID.
  * @param taskId The ID of the task
  */
