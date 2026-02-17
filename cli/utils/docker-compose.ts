@@ -121,6 +121,22 @@ export async function getServicePort(workdir: string, composeFilePath: string, s
   return parseInt(new TextDecoder().decode(output.stdout).trim(), 10);
 }
 
+export async function getServiceContainerId(
+  workdir: string,
+  composeFilePath: string,
+  serviceName: string,
+  projectName?: string
+): Promise<string | null> {
+  const cmd = composeCmd(["ps", "-q", "-a", serviceName], workdir, composeFilePath, projectName);
+  try {
+    const output = await cmd.output();
+    const id = new TextDecoder().decode(output.stdout).trim();
+    return id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getServiceHostPort(
   workdir: string, 
   composeFilePath: string, 

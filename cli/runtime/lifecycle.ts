@@ -4,7 +4,7 @@ import * as Git from "../utils/git.ts";
 import * as GitWorktree from "../utils/git-worktree.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";
-import { RunContext } from "./types.ts";
+import { RunContext, RunState } from "./types.ts";
 import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
 
 export interface PrepareOptions {
@@ -194,4 +194,58 @@ export async function getHostPort(ctx: RunContext, containerPort: number): Promi
   } catch (e) {
     throw new Error(`Port ${containerPort} is not opened`);
   }
+}
+
+
+export async function getRunState(ctx: RunContext): Promise<RunState> {
+  const branchExists = await Git.branchExists(ctx.branchName);
+  const worktreeExists = await exists(ctx.worktreePath);
+  const composeFileExists = await exists(ctx.paths.composeFile);
+
+  // Helper to find container
+  let containerId: string | null = null;
+  if (composeFileExists) {
+    containerId = await Compose.getServiceContainerId(
+      ctx.paths.runDir,
+      ctx.paths.composeFile,
+      "task",
+      ctx.dockerProjectName
+    );
+  } else {
+    // Fallback: try to find by predictable name if compose file is gone
+    // Docker Compose V2 usually names: project-service-index
+    const name = `${ctx.dockerProjectName}-task-1`;
+    containerId = await Docker.getContainerIdByName(name);
+  }
+
+  // 2. Check Traces
+  if (!branchExists && !worktreeExists && !containerId) {
+    return "unknown";
+  }
+
+  // 3. Analyze Container Status
+  if (containerId) {
+    const { status, exitCode } = await Docker.getContainerStatus(containerId);
+
+    if (status === "created" || status === "restarting") {
+        return "starting";
+    }
+
+    if (status === "running") {
+        return "working";
+    }
+
+    if (status === "exited") {
+        if (exitCode === 0) {
+            return "completed";
+        }
+        return "failed";
+    }
+    
+    // Fallback for weird states (dead, paused, removing)
+    return "failed";
+  }
+
+  // 4. No container, but artifacts exist
+  return "preparing";
 }

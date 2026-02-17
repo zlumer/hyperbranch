@@ -100,19 +100,20 @@ export async function getContainerIdByName(name: string): Promise<string | null>
   }
 }
 
-export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string }> {
+export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string; exitCode: number | null }> {
   try {
-    const output = await dcmd(["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}", cid], {
+    const output = await dcmd(["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}}", cid], {
         stdout: "piped",
         stderr: "null",
     })
-    if (!output.success) return { status: "unknown", startedAt: "" }
+    if (!output.success) return { status: "unknown", startedAt: "", exitCode: null }
     
     const text = new TextDecoder().decode(output.stdout).trim()
-    const [status, startedAt] = text.split("|")
-    return { status, startedAt }
+    const [status, startedAt, exitCodeStr] = text.split("|")
+    const exitCode = exitCodeStr ? parseInt(exitCodeStr, 10) : null
+    return { status, startedAt, exitCode: isNaN(exitCode as number) ? null : exitCode }
   } catch {
-    return { status: "unknown", startedAt: "" }
+    return { status: "unknown", startedAt: "", exitCode: null }
   }
 }
 

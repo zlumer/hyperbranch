@@ -1,6 +1,6 @@
 import { join, resolve } from "@std/path";
 import { getRunBranchName } from "../utils/branch-naming.ts";
-import { getRunDir as getRunDirFromWorktree, RUN_DIR_NAME, WORKTREES_DIR } from "../utils/paths.ts";
+import { getRunDir as getRunDirFromWorktree, WORKTREES_DIR, TASKS_DIR } from "../utils/paths.ts";
 import { RunContext } from "./types.ts";
 
 export function getRunContext(taskId: string, runIndex: number): RunContext
@@ -11,6 +11,8 @@ export function getRunContext(taskId: string, runIndex: number): RunContext
 	const worktreePath = resolve(WORKTREES_DIR(), worktreeDirName);
 	const runDir = getRunDirFromWorktree(worktreePath);
 	const dockerProjectName = `hb-${taskId}-${runIndex}`;
+    // Assuming a 'runs' directory under tasks for summaries
+	const summaryPath = join(TASKS_DIR(), "runs", `${taskId}-${runIndex}.json`);
 
 	return {
 		taskId,
@@ -18,6 +20,7 @@ export function getRunContext(taskId: string, runIndex: number): RunContext
 		branchName,
 		worktreePath,
 		dockerProjectName,
+        summaryPath,
 		paths: {
 			runDir,
 			composeFile: join(runDir, "docker-compose.yml"),

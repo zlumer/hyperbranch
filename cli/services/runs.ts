@@ -74,7 +74,7 @@ export async function removeRun(taskId: string, runIndex: number, force: boolean
 export async function getStatus(runId: string): Promise<string> {
   const { taskId, runIndex } = parseRunId(runId);
   const ctx = getRunContext(taskId, runIndex);
-  const { status } = await Lifecycle.inspect(ctx);
+  const status = await Lifecycle.getRunState(ctx);
   return status;
 }
 
@@ -94,7 +94,7 @@ export async function listRuns(taskId: string): Promise<RunInfo[]> {
     if (runIdx === undefined) continue;
 
     const ctx = getRunContext(taskId, runIdx);
-    const { status } = await Lifecycle.inspect(ctx);
+    const status = await Lifecycle.getRunState(ctx);
     
     runs.push({
       runId: branch,
