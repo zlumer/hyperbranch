@@ -1,6 +1,7 @@
 .aider*
 _chats
 .hyperbranch/.env
+.hyperbranch/.env.*
 .hyperbranch/.worktrees
 .hyperbranch/.current-run
 node_modules

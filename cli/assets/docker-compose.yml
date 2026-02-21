@@ -5,7 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
     entrypoint: ["/entrypoint.sh"]
-    env_file: ".env.compose"
+    env_file:
+      - .env.compose
+      - .env
     volumes:
       - type: bind
         source: ../.. # Bind mount the entire repo

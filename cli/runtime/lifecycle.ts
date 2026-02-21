@@ -76,6 +76,11 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
   };
 
   await Docker.writeEnvComposeFile(ctx.paths.runDir, env);
+
+  // 5. Copy hyperbranch env vars to the process env
+  const source = join(HYPERBRANCH_DIR, ".env.run")
+  if (await exists(source))
+    await Deno.copyFile(source, join(ctx.paths.runDir, ".env"))
 }
 
 /**
