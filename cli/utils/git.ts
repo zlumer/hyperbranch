@@ -289,3 +289,12 @@ export async function getConfig(key: string): Promise<string | null> {
     return null;
   }
 }
+
+export async function commitDirtyTaskFile(taskId: string): Promise<void> {
+  // AI! implement:
+  // - calculate task file path from taskId
+  // - check if git has staged files (apart from this task), if so, throw error to avoid committing unintended changes
+  // - check if task file is dirty, if not, do nothing
+  // - read task file to get task header for commit message
+  // - if dirty, add commit with message "chore: added task <task header>"
+}
