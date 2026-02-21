@@ -11,9 +11,10 @@ export async function runCommand(args: Args) {
     Deno.exit(1);
   }
 
-  const options: Runs.RunOptions = {
+  const options: Runs.RunOptions & { commit?: boolean } = {
     image: args["image"] as string,
     dockerfile: args["dockerfile"] as string,
+    commit: args["commit"] as boolean,
     // dockerArgs: (args["docker-args"] as string)?.split(" ").filter(Boolean), // Not supported in Compose mode easily
   };
 

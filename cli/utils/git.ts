@@ -5,6 +5,7 @@ import {
   getTaskBranchName,
   parseRunNumber,
 } from "./branch-naming.ts";
+import { getTaskPath } from "./tasks.ts";
 
 // Helper to run git command
 export async function git(args: string[], cwd?: string): Promise<string> {
@@ -291,10 +292,30 @@ export async function getConfig(key: string): Promise<string | null> {
 }
 
 export async function commitDirtyTaskFile(taskId: string): Promise<void> {
-  // AI! implement:
-  // - calculate task file path from taskId
-  // - check if git has staged files (apart from this task), if so, throw error to avoid committing unintended changes
-  // - check if task file is dirty, if not, do nothing
-  // - read task file to get task header for commit message
-  // - if dirty, add commit with message "chore: added task <task header>"
+  const taskPath = getTaskPath(taskId)
+
+  // Check if git has staged files (apart from this task)
+  const stagedOutput = await git(["diff", "--name-only", "--cached"])
+  const stagedFiles = stagedOutput.split("\n").filter(Boolean)
+  
+  const hasOtherStagedFiles = stagedFiles.some(file => !taskPath.endsWith(file))
+  if (hasOtherStagedFiles)
+    throw new Error("Git has staged files apart from this task. Aborting to avoid committing unintended changes.")
+
+  // Check if task file is dirty
+  const statusOutput = await git(["status", "--porcelain", taskPath])
+  if (!statusOutput.trim())
+    return // Not dirty, do nothing
+
+  // Read task file to get task header for commit message
+  const task = await loadTask(taskId)
+  let taskHeader = taskId
+  
+  const match = task.body.match(/^#\s+(.*)$/m)
+  if (match)
+    taskHeader = match[1].trim()
+
+  // Add and commit
+  await git(["add", taskPath])
+  await git(["commit", "-m", `chore: added task ${taskHeader}`])
 }
