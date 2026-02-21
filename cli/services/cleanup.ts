@@ -1,22 +1,22 @@
 import { join } from "@std/path";
 import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
-import * as GitWorktree from "../utils/git-worktree.ts";
+import * as GitClones from "../utils/git-clones.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Runs from "./runs.ts";
-import { WORKTREES_DIR } from "../utils/paths.ts";
+import { RUNS_DIR } from "../utils/paths.ts";
 import { getRunBranchName } from "../utils/branch-naming.ts";
 
 export async function sweep() {
-  const worktreesDir = WORKTREES_DIR();
-  if (!(await exists(worktreesDir))) {
-    console.log("No worktrees found.");
+  const runsDir = RUNS_DIR();
+  if (!(await exists(runsDir))) {
+    console.log("No runs found.");
     return;
   }
 
-  console.log("Sweeping worktrees...");
+  console.log("Sweeping runs...");
 
-  for await (const entry of Deno.readDir(worktreesDir)) {
+  for await (const entry of Deno.readDir(runsDir)) {
     if (!entry.isDirectory) continue;
     
     // Expect hb-<taskId>-<runIndex>
@@ -35,10 +35,10 @@ export async function sweep() {
     }
 
     // Check Dirty
-    const worktreePath = join(worktreesDir, entry.name);
-    const isDirty = await GitWorktree.status(worktreePath);
+    const clonePath = join(runsDir, entry.name);
+    const isDirty = await GitClones.status(clonePath);
     if (isDirty) {
-      console.log(`Skipping ${taskId}/${runIndex}: Worktree is dirty.`);
+      console.log(`Skipping ${taskId}/${runIndex}: Clone is dirty.`);
       continue;
     }
 
@@ -64,12 +64,12 @@ export async function sweep() {
 export async function deepSweep() {
   console.log("Performing deep sweep of Docker resources...");
   
-  // 1. Collect active project names from worktrees
+  // 1. Collect active project names from runs
   const activeProjects = new Set<string>();
-  const worktreesDir = WORKTREES_DIR();
+  const runsDir = RUNS_DIR();
   
-  if (await exists(worktreesDir)) {
-    for await (const entry of Deno.readDir(worktreesDir)) {
+  if (await exists(runsDir)) {
+    for await (const entry of Deno.readDir(runsDir)) {
       if (!entry.isDirectory) continue;
       // We accept any directory starting with hb- as a valid project to preserve
       if (entry.name.startsWith("hb-")) {
@@ -114,20 +114,20 @@ export async function deepSweep() {
 }
 
 export async function listCandidates() {
-  const worktreesDir = WORKTREES_DIR();
-  if (!(await exists(worktreesDir))) {
-    console.log("No worktrees found.");
+  const runsDir = RUNS_DIR();
+  if (!(await exists(runsDir))) {
+    console.log("No runs found.");
     return;
   }
 
   console.log("Candidates for removal (sweep):");
   let found = false;
 
-  for await (const entry of Deno.readDir(worktreesDir)) {
+  for await (const entry of Deno.readDir(runsDir)) {
     if (!entry.isDirectory)
       continue
 
-    const candidate = await checkDir(entry.name, worktreesDir)
+    const candidate = await checkDir(entry.name, runsDir)
     if (candidate.type !== "ready")
       continue
     
@@ -149,7 +149,7 @@ type DirStatus = { type: "invalid_name" }
   | { type: "not_merged" } & Candidate
   | { type: "ready" } & Candidate
 
-async function checkDir(dir: string, worktreesDir: string): Promise<DirStatus> {
+async function checkDir(dir: string, runsDir: string): Promise<DirStatus> {
   const match = dir.match(/^hb-(.+)-(\d+)$/);
   if (!match)
     return { type: "invalid_name" }
@@ -164,8 +164,8 @@ async function checkDir(dir: string, worktreesDir: string): Promise<DirStatus> {
     return { type: "active", taskId, runIndex }
 
   // Check Dirty
-  const worktreePath = join(worktreesDir, dir);
-  const isDirty = await GitWorktree.status(worktreePath);
+  const clonePath = join(runsDir, dir);
+  const isDirty = await GitClones.status(clonePath);
   if (isDirty)
     return { type: "dirty", taskId, runIndex }
 

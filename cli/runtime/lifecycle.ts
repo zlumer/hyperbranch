@@ -1,7 +1,7 @@
 import { exists } from "@std/fs/exists";
 import { join } from "@std/path";
 import * as Git from "../utils/git.ts";
-import * as GitWorktree from "../utils/git-worktree.ts";
+import * as GitClones from "../utils/git-clones.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";
 import { RunContext, RunState } from "./types.ts";
@@ -17,7 +17,7 @@ export interface PrepareOptions {
 
 /**
  * Phase 1: Prepare
- * Creates the worktree and scaffolds the run directory.
+ * Creates the clone and scaffolds the run directory.
  */
 export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Promise<void> {
   // 1. Resolve Base Branch
@@ -36,15 +36,15 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
     );
   }
 
-  // 2. Create Worktree
-  if (await exists(ctx.worktreePath)) {
-    throw new Error(`Worktree for run already exists at '${ctx.worktreePath}'`);
+  // 2. Create Clone
+  if (await exists(ctx.clonePath)) {
+    throw new Error(`Clone for run already exists at '${ctx.clonePath}'`);
   }
 
-  await GitWorktree.createWorktree(ctx.branchName, baseBranch, ctx.worktreePath);
+  await GitClones.createClone(ctx.branchName, baseBranch, ctx.clonePath);
 
   // 3. Asset Preparation
-  await Docker.prepareWorktreeAssets(ctx.paths.runDir, {
+  await Docker.prepareRunAssets(ctx.paths.runDir, {
     dockerfile: options.dockerfile,
     // If we support custom compose files in future, pass here
   });
@@ -136,7 +136,7 @@ export async function stop(ctx: RunContext): Promise<void> {
 
 /**
  * Phase 5: Destroy
- * deeply cleans up all artifacts (Containers -> Worktree -> Branch).
+ * deeply cleans up all artifacts (Containers -> Clone -> Branch).
  */
 export async function destroy(ctx: RunContext): Promise<void> {
   // 1. Docker Cleanup (Down -v to remove volumes/networks)
@@ -152,18 +152,11 @@ export async function destroy(ctx: RunContext): Promise<void> {
     // We could use `docker compose -p project down` without file? 
     // No, compose usually needs the file to know what to down, unless we use standard naming.
     // Fallback: manually kill containers by label/name?
-    // For now, assume if file is gone, maybe worktree is half-deleted.
+    // For now, assume if file is gone, maybe clone is half-deleted.
   }
 
-  // 2. Worktree Cleanup
-  if (await exists(ctx.worktreePath)) {
-     // Check if dirty? For force destroy we don't care.
-     await GitWorktree.removeWorktree(ctx.worktreePath, true);
-  } else {
-     // It might be registered but directory missing
-     // Try to prune
-     await GitWorktree.pruneWorktrees();
-  }
+  // 2. Clone Cleanup
+  await GitClones.removeClone(ctx.clonePath, ctx.branchName, true);
 
   // 3. Branch Cleanup
   if (await Git.branchExists(ctx.branchName)) {
@@ -204,7 +197,7 @@ export async function getHostPort(ctx: RunContext, containerPort: number): Promi
 
 export async function getRunState(ctx: RunContext): Promise<RunState> {
   const branchExists = await Git.branchExists(ctx.branchName);
-  const worktreeExists = await exists(ctx.worktreePath);
+  const cloneExists = await exists(ctx.clonePath);
   const composeFileExists = await exists(ctx.paths.composeFile);
 
   // Helper to find container
@@ -224,7 +217,7 @@ export async function getRunState(ctx: RunContext): Promise<RunState> {
   }
 
   // 2. Check Traces
-  if (!branchExists && !worktreeExists && !containerId) {
+  if (!branchExists && !cloneExists && !containerId) {
     return "unknown";
   }
 

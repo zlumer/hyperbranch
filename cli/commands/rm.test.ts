@@ -61,20 +61,20 @@ function setupTestEnv() {
   
   // Create .hyperbranch structure
   const hbDir = join(cwd, ".hyperbranch");
-  const worktreesDir = join(hbDir, ".worktrees");
+  const runsDir = join(hbDir, ".runs");
   const tasksDir = join(hbDir, "tasks");
-  Deno.mkdirSync(worktreesDir, { recursive: true });
+  Deno.mkdirSync(runsDir, { recursive: true });
   Deno.mkdirSync(tasksDir, { recursive: true });
   
   // Set env var for tasks dir AND worktrees dir
   Deno.env.set("HB_TASKS_DIR", tasksDir);
-  Deno.env.set("HB_WORKTREES_DIR", worktreesDir);
+  Deno.env.set("HB_RUNS_DIR", runsDir);
 
   // Helper to create run scaffold
   const createRun = async (taskId: string, runIndex: number) => {
       // Logic from branch-naming.ts: hb/<taskId>/<runIndex> -> hb-<taskId>-<runIndex>
       const branchName = `hb-${taskId}-${runIndex}`;
-      const runDir = join(worktreesDir, branchName);
+      const runDir = join(runsDir, branchName);
       await ensureDir(runDir);
       const dotCurrentRun = join(runDir, ".hyperbranch", ".current-run");
       await ensureDir(dotCurrentRun);
@@ -84,7 +84,7 @@ function setupTestEnv() {
 
   return {
     cwd,
-    worktreesDir,
+    runsDir,
     tasksDir,
     createRun,
     teardown: () => {
@@ -113,18 +113,15 @@ Deno.test("hb rm <task>/<run> - remove inactive run", async () => {
     [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: 
         { success: true },
 
-    // Destroy: Remove Worktree
-    [`git worktree remove ${runDir} --force`]: { success: true },
+    // Destroy: Remove Clone Remote
+    [`git remote remove hb-123-1`]: { success: true },
+    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
 
     // Destroy: Delete Branch
     "git branch -D hb/123/1": { success: true },
     
     // Resolve base branch
     "git rev-parse --verify hb/123": { success: false }, 
-    
-    // Worktree Prune Logic
-    "git rev-parse --git-common-dir": { success: true, stdout: ".git" },
-    "git worktree prune": { success: true },
   });
 
   try {
@@ -146,6 +143,8 @@ Deno.test("hb rm <task>/<run> - fail on active run", async () => {
     // Check Status (Running)
     [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 ps -q`]: 
         { success: true, stdout: "container_id_123" },
+    "docker inspect --format {{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}} container_id_123": 
+        { success: true, stdout: "running|2023-01-01|0" },
   });
 
   try {
@@ -173,15 +172,12 @@ Deno.test("hb rm <task>/<run> --force - remove active run", async () => {
     [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: 
         { success: true },
 
-    // Destroy: Remove Worktree
-    [`git worktree remove ${runDir} --force`]: { success: true },
+    // Destroy: Remove Clone Remote
+    [`git remote remove hb-123-1`]: { success: true },
+    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
 
     // Destroy: Delete Branch
     "git branch -D hb/123/1": { success: true },
-    
-    // Worktree Prune Logic
-    "git rev-parse --git-common-dir": { success: true, stdout: ".git" },
-    "git worktree prune": { success: true },
   });
 
   try {
@@ -205,7 +201,7 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
     // Status (Inactive)
     [`docker compose -f ${join(run1.dotCurrentRun, "docker-compose.yml")} -p hb-123-1 ps -q`]: 
         { success: true, stdout: "" },
-    // Worktree Clean
+    // Clone Clean
     [`git status --porcelain`]: { success: true, stdout: "" }, 
     [`[${run1.runDir}] git status --porcelain`]: { success: true, stdout: "" },
     // Merged
@@ -217,18 +213,15 @@ Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
     // Status (Inactive)
     [`docker compose -f ${join(run2.dotCurrentRun, "docker-compose.yml")} -p hb-123-2 ps -q`]: 
         { success: true, stdout: "" },
-    // Worktree Dirty
+    // Clone Dirty
     [`[${run2.runDir}] git status --porcelain`]: { success: true, stdout: "M file.txt" },
 
     // Destroy Run 1
     [`docker compose -f ${join(run1.dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: 
         { success: true },
-    [`git worktree remove ${run1.runDir} --force`]: { success: true },
+    [`git remote remove hb-123-1`]: { success: true },
+    "git fetch hb-123-1 hb-123-1:hb-123-1": { success: true },
     "git branch -D hb/123/1": { success: true },
-    
-    // Worktree Prune Logic
-    "git rev-parse --git-common-dir": { success: true, stdout: ".git" },
-    "git worktree prune": { success: true },
   });
 
   try {
@@ -258,18 +251,15 @@ Deno.test("hb rm <hb/task/run> - remove inactive run with prefix", async () => {
     [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: 
         { success: true },
 
-    // Destroy: Remove Worktree
-    [`git worktree remove ${runDir} --force`]: { success: true },
+    // Destroy: Remove Clone Remote
+    [`git remote remove hb-123-1`]: { success: true },
+    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
 
     // Destroy: Delete Branch
     "git branch -D hb/123/1": { success: true },
     
     // Resolve base branch
     "git rev-parse --verify hb/123": { success: false }, 
-    
-    // Worktree Prune Logic
-    "git rev-parse --git-common-dir": { success: true, stdout: ".git" },
-    "git worktree prune": { success: true },
   });
 
   try {

@@ -7,8 +7,8 @@ export interface DockerConfig {
   name?: string
   dockerfile?: string
   exec: string[]
-  workdir: string // The path INSIDE the container (mapped to worktree)
-  hostWorkdir: string // The path ON HOST (the worktree)
+  workdir: string // The path INSIDE the container (mapped to clone)
+  hostWorkdir: string // The path ON HOST (the clone)
   runDir: string // The path ON HOST where run files are stored
   mounts: string[]
   env: Record<string, string>
@@ -22,7 +22,7 @@ const fromAssets = (filename: string): string => join(ASSETS_DIR, filename)
 const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
   copy(overrideSource ?? fromAssets(filename), join(destDir, filename), { overwrite: true })
 
-export async function prepareWorktreeAssets(
+export async function prepareRunAssets(
   runDir: string,
   sourcePaths?: {
     entrypoint?: string

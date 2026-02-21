@@ -54,13 +54,16 @@ export async function removeRun(taskId: string, runIndex: number, force: boolean
   // Safety checks
   if (!force) {
     const status = await getStatus(runId);
-    if (status.toLowerCase() === "running") {
+    if (status.toLowerCase() === "working" || status.toLowerCase() === "starting") {
        throw new Error(`Run ${taskId}/${runIndex} is active (${status}). Use --force to remove.`);
     }
 
     // Check Git Cleanliness
     const runBranch = runId;
     if (await Git.branchExists(runBranch)) {
+        const branchInfo = splitRunBranchName(runBranch);
+        const remoteName = branchInfo ? `hb-${branchInfo.taskId}-${branchInfo.runIndex}` : runBranch;
+        await Git.fetch(remoteName, `${runBranch}:${runBranch}`);
         const baseBranch = await Git.resolveBaseBranch(taskId);
         const unmerged = await Git.getUnmergedCommits(runBranch, baseBranch);
         if (unmerged.trim().length > 0) {
@@ -144,6 +147,9 @@ export async function mergeRun(
     );
   }
 
+  const branchInfo = splitRunBranchName(runId);
+  const remoteName = branchInfo ? `hb-${branchInfo.taskId}-${branchInfo.runIndex}` : runId;
+  await Git.fetch(remoteName, `${runId}:${runId}`);
   await Git.merge(runId, strategy);
 
   if (cleanup) {
@@ -163,6 +169,11 @@ export function parseRunId(runId: string): { taskId: string; runIndex: number } 
   }
   return { taskId: info.taskId, runIndex: info.runIndex };
 }
+
+export const _deps = {
+  Git,
+  Lifecycle
+};
 
 // Logs helper for server/CLI
 export async function getLogsStream(runId: string, follow: boolean): Promise<Deno.ChildProcess> {

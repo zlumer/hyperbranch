@@ -1,15 +1,15 @@
 import { join, resolve } from "@std/path";
 import { getRunBranchName } from "../utils/branch-naming.ts";
-import { getRunDir as getRunDirFromWorktree, WORKTREES_DIR, TASKS_DIR } from "../utils/paths.ts";
+import { getRunDir as getRunDirFromClone, RUNS_DIR, TASKS_DIR } from "../utils/paths.ts";
 import { RunContext } from "./types.ts";
 
 export function getRunContext(taskId: string, runIndex: number): RunContext
 {
 	const branchName = getRunBranchName(taskId, runIndex);
 	// Replace slashes with dashes for filesystem safety
-	const worktreeDirName = branchName.replace(/\//g, "-");
-	const worktreePath = resolve(WORKTREES_DIR(), worktreeDirName);
-	const runDir = getRunDirFromWorktree(worktreePath);
+	const cloneDirName = branchName.replace(/\//g, "-");
+	const clonePath = resolve(RUNS_DIR(), cloneDirName);
+	const runDir = getRunDirFromClone(clonePath);
 	const dockerProjectName = `hb-${taskId}-${runIndex}`;
     // Assuming a 'runs' directory under tasks for summaries
 	const summaryPath = join(TASKS_DIR(), "runs", `${taskId}-${runIndex}.json`);
@@ -18,7 +18,7 @@ export function getRunContext(taskId: string, runIndex: number): RunContext
 		taskId,
 		runIndex,
 		branchName,
-		worktreePath,
+		clonePath,
 		dockerProjectName,
         summaryPath,
 		paths: {

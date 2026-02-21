@@ -39,6 +39,10 @@ export async function commit(
   await git(args, cwd);
 }
 
+export async function fetch(remote: string, refspec: string): Promise<void> {
+  await git(["fetch", remote, refspec]);
+}
+
 export async function getCurrentBranch(): Promise<string> {
   return await git(["rev-parse", "--abbrev-ref", "HEAD"]);
 }
@@ -197,7 +201,7 @@ export async function merge(
   // "git rebase branch" (rebases current onto branch? No, usually we want to merge branch into current)
 
   // If strategy is rebase, it's ambiguous.
-  // "Merge the run's worktree/branch back to the main branch."
+  // "Merge the run's clone/branch back to the main branch."
   // If I am on Main, and I want to "Merge" RunBranch:
   // - Merge: git merge RunBranch
   // - Squash: git merge --squash RunBranch
