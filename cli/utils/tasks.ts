@@ -1,9 +1,6 @@
 import { join } from "@std/path"
 import { TASKS_DIR } from "./paths.ts"
 
-// --- Configuration ---
-export { TASKS_DIR }
-
 // --- ID Generation ---
 export function generateTaskId(): string
 {

@@ -14,6 +14,11 @@ export async function run(
   taskId: string,
   options: RunOptions & { commit?: boolean } = {},
 ): Promise<RunResult> {
+
+  // commit the dirty task file first if --commit is passed
+  if (options.commit)
+    await Git.commitDirtyTaskFile(taskId);
+
   // 1. Determine next run index
   // We need to look at existing branches to find the next index
   const nextBranch = await Git.getNextRunBranch(taskId);
@@ -22,9 +27,6 @@ export async function run(
   const ctx = getRunContext(taskId, runIndex);
 
   // 2. Prepare
-  if (options.commit)
-    await Git.commitDirtyTaskFile(taskId);
-
   await Lifecycle.prepare(ctx, options);
 
   // 3. Start
