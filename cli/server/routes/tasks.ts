@@ -207,6 +207,44 @@ app.post("/:id/runs/:runId/merge", async (c) => {
   }
 });
 
+// Get run port
+app.get("/:id/runs/:runId/port", async (c) => {
+  const id = c.req.param("id");
+  const runId = c.req.param("runId");
+  
+  let branch = runId;
+  if (!isNaN(Number(runId))) {
+    branch = getRunBranchName(id, Number(runId));
+  }
+
+  try {
+    const port = await Runs.getHostPort(branch, 4096);
+    return c.json({ port });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 404);
+  }
+});
+
+// Delete run
+app.delete("/:id/runs/:runId", async (c) => {
+  const id = c.req.param("id");
+  const runId = c.req.param("runId");
+  const force = c.req.query("force") === "true";
+
+  let runIndex = Number(runId);
+  if (isNaN(runIndex)) {
+    const parsed = Runs.parseRunId(runId);
+    runIndex = parsed.runIndex;
+  }
+
+  try {
+    await Runs.removeRun(id, runIndex, force);
+    return c.json({ message: "Run removed" });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400);
+  }
+});
+
 // WebSocket Logs for specific run
 app.get(
   "/:id/runs/:runId/logs",
@@ -227,8 +265,17 @@ app.get(
   upgradeWebSocket((c) => {
     let intervalId: number;
     return {
-      onOpen: (_evt, ws) => {
+      onOpen: async (_evt, ws) => {
         const id = c.req.param("id");
+
+        // Send initial state
+        try {
+          const runs = await Runs.listRuns(id);
+          ws.send(JSON.stringify({ type: "runs_update", data: runs }));
+        } catch (e) {
+          // ignore
+        }
+
         intervalId = setInterval(async () => {
           try {
             const runs = await Runs.listRuns(id);

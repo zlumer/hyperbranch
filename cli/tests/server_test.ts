@@ -62,6 +62,26 @@ Deno.test("Server Integration Tests", async (t) => {
         assertEquals(task.id, createdTaskId);
     });
     
+    await t.step("GET /tasks/:id/runs/:runId/port - not found", async () => {
+        const res = await app.request(`/tasks/${createdTaskId}/runs/1/port`, {
+            headers: { "X-API-Key": API_KEY },
+        });
+        assertEquals(res.status, 404);
+        const data = await res.json();
+        assertEquals(data.error.includes("does not exist"), true);
+    });
+
+    await t.step("DELETE /tasks/:id/runs/:runId - bad run", async () => {
+        const res = await app.request(`/tasks/${createdTaskId}/runs/1`, {
+            method: "DELETE",
+            headers: { "X-API-Key": API_KEY },
+        });
+        // Deletion is idempotent, so it returns 200 even if it doesn't exist
+        assertEquals(res.status, 200);
+        const data = await res.json();
+        assertEquals(data.message, "Run removed");
+    });
+    
     // Cleanup
     await Deno.remove(tempDir, { recursive: true });
 });
