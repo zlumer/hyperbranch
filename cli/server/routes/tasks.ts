@@ -17,12 +17,14 @@ app.post("/", async (c) => {
   const body = await c.req.json();
   const title = body.title;
   const parentId = body.parentId;
+  const description = body.description;
+  const status = body.status;
 
   if (!title) {
     throw new Error("Title is required");
   }
 
-  const task = await Tasks.create(title, parentId);
+  const task = await Tasks.create(title, parentId, description, status);
   return c.json(task, 201);
 });
 
@@ -216,6 +218,30 @@ app.get(
         branch = getRunBranchName(id, Number(runId));
       }
       return branch;
+  })
+);
+
+// WebSocket Status for runs
+app.get(
+  "/:id/runs/status",
+  upgradeWebSocket((c) => {
+    let intervalId: number;
+    return {
+      onOpen: (_evt, ws) => {
+        const id = c.req.param("id");
+        intervalId = setInterval(async () => {
+          try {
+            const runs = await Runs.listRuns(id);
+            ws.send(JSON.stringify({ type: "runs_update", data: runs }));
+          } catch (e) {
+             // ignore
+          }
+        }, 2000);
+      },
+      onClose: () => {
+        clearInterval(intervalId);
+      },
+    };
   })
 );
 

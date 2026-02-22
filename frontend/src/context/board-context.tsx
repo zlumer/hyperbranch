@@ -24,7 +24,7 @@ interface BoardContextType {
     newStatus: TaskStatus,
     newIndex?: number,
   ) => Promise<void>;
-  addTask: (task: { title: string; parentId?: string }) => Promise<void>;
+  addTask: (task: { title: string; parentId?: string; description?: string; status?: string }) => Promise<void>;
   refreshTasks: () => Promise<void>;
 }
 
@@ -95,7 +95,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addTask = async (task: { title: string; parentId?: string }) => {
+  const addTask = async (task: { title: string; parentId?: string; description?: string; status?: string }) => {
     try {
       const newTask = await createTask(task);
       setTasks((prev) => [...prev, newTask]);

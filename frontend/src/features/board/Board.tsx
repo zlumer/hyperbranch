@@ -1,8 +1,9 @@
 import { BoardColumnTypeSchema, useBoardContext } from "../../context/board-context";
 import { type BoardData, type BoardItem, type BoardProps, Kanban } from "react-kanban-kit";
 import { TaskCard } from "./TaskCard";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { type Task } from "../../api/service";
+import { TaskCreateModal } from "./TaskCreateModal";
 
 // Redefine locally since it's not exported from main entry
 type CardRenderProps = {
@@ -58,7 +59,9 @@ const transformToBoardData = (tasks: Task[], columns: string[]): BoardData => {
 };
 
 export function Board() {
-  const { tasks, columns, isLoading, moveTask } = useBoardContext();
+  const { tasks, columns, isLoading, moveTask, addTask } = useBoardContext();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalColumnId, setModalColumnId] = useState<string>("");
 
   const boardData = useMemo(() => transformToBoardData(tasks, columns), [
     tasks,
@@ -109,7 +112,7 @@ export function Board() {
   }
 
   return (
-    <div className="h-full overflow-x-auto">
+    <div className="h-full overflow-x-auto relative">
       <Kanban
         dataSource={boardData}
         configMap={configMap}
@@ -120,6 +123,32 @@ export function Board() {
 		columnClassName={() => "px-1"}
 		columnStyle={() => ({ padding: "4px" })}
 		cardWrapperClassName=""
+        renderColumnFooter={(col: BoardItem) => (
+          <div className="px-4 pb-4 mt-2">
+            <button
+              onClick={() => {
+                setModalColumnId(col.id as string);
+                setIsModalOpen(true);
+              }}
+              className="w-full py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border border-dashed border-gray-300 transition-colors"
+            >
+              + Create Task
+            </button>
+          </div>
+        )}
+      />
+      
+      <TaskCreateModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        defaultStatus={modalColumnId}
+        onSubmit={(title, description) => {
+          addTask({
+            title,
+            description,
+            status: modalColumnId,
+          });
+        }}
       />
     </div>
   );

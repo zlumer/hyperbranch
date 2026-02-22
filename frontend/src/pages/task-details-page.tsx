@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRuns, getTask, type Run, type Task } from "../api/service";
+import { getRuns, getTask, getRunsStatusWebSocketUrl, type Run, type Task } from "../api/service";
 
 export function TaskDetailsPage() {
   const { taskId } = useParams();
@@ -17,6 +17,29 @@ export function TaskDetailsPage() {
         })
         .catch((error) => console.error(error))
         .finally(() => setLoading(false));
+
+      const ws = new WebSocket(getRunsStatusWebSocketUrl(taskId));
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === "runs_update" && Array.isArray(message.data)) {
+            // Map backend run objects to frontend Run interface
+            const updatedRuns = message.data.map((r: any) => ({
+              id: r.runId,
+              taskId,
+              status: r.status,
+              createdAt: "", // Date from backend if available
+            }));
+            setRuns(updatedRuns);
+          }
+        } catch (err) {
+          console.error("WebSocket message parse error", err);
+        }
+      };
+
+      return () => {
+        ws.close();
+      };
     }
   }, [taskId]);
 

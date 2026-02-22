@@ -1,4 +1,4 @@
-import { TaskFile, TaskFrontmatter } from "../types.ts"
+import { TaskFile, TaskFrontmatter, TaskStatus } from "../types.ts"
 import { generateTaskId, getTaskPath, scanTasks } from "../utils/tasks.ts"
 import { checkTaskExists, loadTask, saveTask } from "../utils/loadTask.ts"
 import { add, commit } from "../utils/git.ts"
@@ -10,7 +10,7 @@ import * as Runs from "./runs.ts"
  * Create a new task.
  * Handles ID generation, file creation, and git commit.
  */
-export async function create(title: string, parentId?: string): Promise<TaskFile> {
+export async function create(title: string, parentId?: string, description?: string, status?: string): Promise<TaskFile> {
   if (parentId) {
     const parentExists = await checkTaskExists(parentId)
     if (!parentExists) {
@@ -26,11 +26,11 @@ export async function create(title: string, parentId?: string): Promise<TaskFile
     path: taskPath,
     frontmatter: {
       id,
-      status: "todo",
+      status: (status as TaskStatus) || "todo",
       parent: parentId || null,
       dependencies: [],
     },
-    body: `# ${title}\n\n`,
+    body: `# ${title}\n\n${description || ""}`,
   }
 
   await saveTask(task)

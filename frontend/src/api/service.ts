@@ -65,7 +65,7 @@ export const getTask = async (id: string): Promise<Task> => {
 };
 
 export const createTask = async (
-  task: { title: string; parentId?: string },
+  task: { title: string; parentId?: string; description?: string; status?: string },
 ): Promise<Task> => {
   const res = await apiClient.post("/tasks", task);
   const t = res.data;
@@ -154,4 +154,10 @@ export const getLogsWebSocketUrl = (taskId: string, runId: string) => {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
   return `${protocol}//${host}/api/tasks/${taskId}/runs/${runId}/logs`;
+};
+
+export const getRunsStatusWebSocketUrl = (taskId: string) => {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host;
+  return `${protocol}//${host}/api/tasks/${taskId}/runs/status`;
 };
