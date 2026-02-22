@@ -12,6 +12,7 @@ import { psCommand } from "./commands/ps.ts"
 import { rmCommand } from "./commands/rm.ts"
 import { serverCommand } from "./commands/server.ts"
 import { portCommand } from "./commands/port.ts"
+import { mergeCommand } from "./commands/merge.ts"
 
 // --- File I/O ---
 
@@ -27,8 +28,8 @@ async function main()
 	await ensureRepo()
 
 	const args = parseArgs(Deno.args, {
-		boolean: ["edit", "sweep", "force", "f", "follow"],
-		string: ["parent", "depends-on", "child-of", "from-status"],
+		boolean: ["edit", "sweep", "force", "f", "follow", "cleanup"],
+		string: ["parent", "depends-on", "child-of", "from-status", "strategy"],
 	})
 
 	const command = args._[0]
@@ -65,6 +66,9 @@ async function main()
 		case "port":
 			await portCommand(args)
 			break
+		case "merge":
+			await mergeCommand(args)
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
@@ -78,6 +82,7 @@ async function main()
 			console.log("  ps")
 			console.log("  server [--port <port>]")
 			console.log("  port <run-id> <port>")
+			console.log("  merge <task-id> <run-index> [--strategy <merge|squash|rebase>] [--cleanup]")
 			break
 	}
 }
