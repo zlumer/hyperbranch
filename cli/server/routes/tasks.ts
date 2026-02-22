@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, Context } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import * as Tasks from "../../services/tasks.ts";
 import * as Runs from "../../services/runs.ts";
@@ -145,12 +145,13 @@ app.post("/:id/stop", async (c) => {
   try {
     await Runs.stopRun(runId);
     return c.json({ message: "Task stopped" });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 400);
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 400);
   }
 });
 
-function createLogStreamHandler(getRunId: (c: any) => Promise<string | null>) {
+function createLogStreamHandler(getRunId: (c: Context) => Promise<string | null>) {
   return upgradeWebSocket((c) => {
     let child: Deno.ChildProcess | null = null;
     let killed = false;
@@ -247,8 +248,9 @@ app.get("/:id/runs/:runId/files", async (c) => {
   try {
     const result = await Runs.getRunFiles(branch, path);
     return c.json(result);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 404);
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 404);
   }
 });
 
@@ -267,8 +269,9 @@ app.post("/:id/runs/:runId/merge", async (c) => {
   try {
     await Runs.mergeRun(id, branch, strategy, cleanup);
     return c.json({ message: "Merge successful" });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 400);
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 400);
   }
 });
 
@@ -285,8 +288,9 @@ app.get("/:id/runs/:runId/port", async (c) => {
   try {
     const port = await Runs.getHostPort(branch, 4096);
     return c.json({ port });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 404);
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 404);
   }
 });
 
@@ -305,8 +309,9 @@ app.delete("/:id/runs/:runId", async (c) => {
   try {
     await Runs.removeRun(id, runIndex, force);
     return c.json({ message: "Run removed" });
-  } catch (e: any) {
-    return c.json({ error: e.message }, 400);
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 400);
   }
 });
 
