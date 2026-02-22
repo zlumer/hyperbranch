@@ -104,7 +104,7 @@ export const updateTaskOrder = async (
 export const getRuns = async (taskId: string): Promise<Run[]> => {
   const res = await apiClient.get(`/tasks/${taskId}/runs`);
   return res.data.map((r: any) => ({
-    id: r.runId,
+    id: r.runId.split("/").pop() || r.runId,
     taskId,
     status: r.status,
     createdAt: "",
@@ -118,7 +118,7 @@ export const launchRun = async (
   const res = await apiClient.post(`/tasks/${taskId}/run`, payload);
   const r = res.data;
   return {
-    id: r.runId,
+    id: r.runId.split("/").pop() || r.runId,
     taskId,
     status: r.status,
     createdAt: "",
