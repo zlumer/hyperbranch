@@ -137,7 +137,7 @@ export async function getRunFiles(
 export async function mergeRun(
   taskId: string,
   runId: string,
-  strategy: "merge" | "squash" | "rebase" = "merge",
+  strategy: "merge" | "squash" | "ff",
   cleanup: boolean = false,
 ): Promise<void> {
   const baseBranch = await Git.resolveBaseBranch(taskId);
