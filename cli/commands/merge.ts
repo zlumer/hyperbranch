@@ -7,7 +7,7 @@ export async function mergeCommand(args: any) {
 
   if (!taskId || !runIndexStr) {
     console.error("Error: Task ID and Run Index are required.");
-    console.error("Usage: hb merge <task-id> <run-index> [--strategy <merge|squash|rebase>] [--cleanup]");
+    console.error("Usage: hb merge <task-id> <run-index> [--strategy <merge|squash|ff>] [--cleanup]");
     Deno.exit(1);
   }
 
@@ -18,7 +18,7 @@ export async function mergeCommand(args: any) {
   }
 
   const runId = getRunBranchName(taskId, runIndex);
-  const strategy = (args.strategy as "merge" | "squash" | "rebase") || "rebase";
+  const strategy = (args.strategy as "merge" | "squash" | "ff") || "ff";
   const cleanup = args.cleanup || false;
 
   try {
