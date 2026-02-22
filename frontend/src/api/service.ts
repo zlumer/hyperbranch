@@ -132,6 +132,19 @@ export const getRun = async (taskId: string, runId: string): Promise<Run> => {
   return run;
 };
 
+export const getRunPort = async (taskId: string, runId: string): Promise<number> => {
+  const res = await apiClient.get(`/tasks/${taskId}/runs/${runId}/port`);
+  return res.data.port;
+};
+
+export const deleteRun = async (taskId: string, runId: string): Promise<void> => {
+  await apiClient.delete(`/tasks/${taskId}/runs/${runId}`);
+};
+
+export const acceptRun = async (taskId: string, runId: string, strategy: "merge" | "squash" | "rebase"): Promise<void> => {
+  await apiClient.post(`/tasks/${taskId}/runs/${runId}/merge`, { strategy });
+};
+
 export const getFiles = async (
   taskId: string,
   runId: string,

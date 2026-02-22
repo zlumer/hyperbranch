@@ -1,108 +1,127 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getRun, type Run } from "../api/service";
-import { FileBrowser } from "../features/workspace/file-browser";
-import { CodeViewer } from "../features/workspace/code-viewer";
-import { LogViewer } from "../features/workspace/log-viewer";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { getRun, getRunPort, acceptRun, type Run } from "../api/service";
 
 export function RunWorkspacePage() {
   const { taskId, runId } = useParams();
+  const navigate = useNavigate();
   const [run, setRun] = useState<Run | null>(null);
+  const [port, setPort] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"files" | "logs">("files");
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("squash");
 
   useEffect(() => {
     if (taskId && runId) {
-      getRun(taskId, runId)
-        .then((data) => setRun(data))
-        .catch((error) => console.error(error))
+      Promise.all([
+        getRun(taskId, runId).catch(err => {
+          console.error(err);
+          return null;
+        }),
+        getRunPort(taskId, runId).catch(err => {
+          console.error("Failed to get port", err);
+          return null;
+        })
+      ])
+        .then(([runData, portData]) => {
+          if (runData) setRun(runData);
+          if (portData) setPort(portData);
+        })
         .finally(() => setLoading(false));
     }
   }, [taskId, runId]);
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  const handleAcceptRun = async () => {
+    if (!taskId || !runId) return;
+    try {
+      await acceptRun(taskId, runId, mergeStrategy);
+      navigate(`/tasks/${taskId}`);
+    } catch (err) {
+      console.error("Failed to accept run", err);
+      alert("Failed to accept run.");
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  if (loading) return <div className="p-8">Loading workspace...</div>;
   if (!run || !taskId) return <div className="p-8">Run not found</div>;
 
   return (
-    <div className="flex h-screen bg-gray-100">
-      {/* Sidebar / Navigation */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Top Navigation Bar */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-4">
           <Link
             to={`/tasks/${taskId}`}
-            className="text-sm text-blue-600 hover:underline mb-2 block"
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
           >
-            &larr; Back to Task
+            &larr; Back
           </Link>
-          <h1 className="font-bold truncate">Run #{run.id}</h1>
-          <div className="text-xs text-gray-500">Status: {run.status}</div>
+          <div className="h-4 w-px bg-gray-300"></div>
+          <div className="text-sm font-semibold text-gray-700">Run #{run.id}</div>
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+            run.status === "success" ? "bg-green-100 text-green-800" :
+            run.status === "failed" ? "bg-red-100 text-red-800" :
+            run.status === "running" ? "bg-yellow-100 text-yellow-800" :
+            "bg-gray-100 text-gray-800"
+          }`}>
+            {run.status}
+          </span>
         </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200">
-          <button
-            className={`flex-1 py-2 text-sm font-medium ${
-              activeTab === "files"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-            onClick={() => setActiveTab("files")}
-          >
-            Files
-          </button>
-          <button
-            className={`flex-1 py-2 text-sm font-medium ${
-              activeTab === "logs"
-                ? "text-blue-600 border-b-2 border-blue-600"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-            onClick={() => setActiveTab("logs")}
-          >
-            Logs
-          </button>
-        </div>
-
-        {/* Sidebar Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {activeTab === "files"
-            ? (
-              <FileBrowser
-                taskId={taskId}
-                runId={run.id}
-                onSelectFile={setSelectedFile}
-                selectedFile={selectedFile}
-              />
-            )
-            : (
-              <div className="p-4 text-sm text-gray-500">
-                Logs are shown in the main panel when selected.
-              </div>
-            )}
+        
+        <div className="flex items-center gap-2 text-sm">
+          {accepting ? (
+            <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded border border-gray-200">
+              <span className="text-gray-600 font-medium">Strategy:</span>
+              <select
+                value={mergeStrategy}
+                onChange={(e) => setMergeStrategy(e.target.value as any)}
+                className="border border-gray-300 rounded px-2 py-1 bg-white"
+              >
+                <option value="squash">Squash</option>
+                <option value="merge">Merge</option>
+                <option value="rebase">Rebase</option>
+              </select>
+              <button 
+                onClick={handleAcceptRun} 
+                className="px-3 py-1 bg-green-600 text-white rounded font-medium hover:bg-green-700 ml-1"
+              >
+                Confirm
+              </button>
+              <button 
+                onClick={() => setAccepting(false)} 
+                className="px-3 py-1 bg-white text-gray-700 border border-gray-300 rounded font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAccepting(true)}
+              className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded font-medium shadow-sm transition-colors"
+            >
+              Accept Run
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-          <h2 className="font-semibold">Workspace</h2>
-          <div className="flex gap-2">
-            <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm">
-              Rerun
-            </button>
-            <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
-              Save
-            </button>
+      {/* Fullscreen Iframe */}
+      <div className="flex-1 bg-white relative">
+        {port ? (
+          <iframe
+            src={`http://localhost:${port}`}
+            className="absolute inset-0 w-full h-full border-0"
+            title="Workspace"
+            sandbox="allow-same-origin allow-scripts allow-forms"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500 flex-col gap-2">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <p>Workspace port not available</p>
           </div>
-        </div>
-
-        {/* Workspace Content */}
-        <div className="flex-1 overflow-hidden bg-white">
-          {activeTab === "logs"
-            ? <LogViewer taskId={taskId} runId={run.id} />
-            : <CodeViewer taskId={taskId} runId={run.id} path={selectedFile} />}
-        </div>
+        )}
       </div>
     </div>
   );

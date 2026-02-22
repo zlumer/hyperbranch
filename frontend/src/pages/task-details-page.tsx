@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, type Run, type Task } from "../api/service";
+import { Link, useParams, useNavigate } from "react-router-dom";
+import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, type Run, type Task } from "../api/service";
 
 export function TaskDetailsPage() {
   const { taskId } = useParams();
+  const navigate = useNavigate();
   const [task, setTask] = useState<Task | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,6 +13,10 @@ export function TaskDetailsPage() {
   const [prompt, setPrompt] = useState("");
   const [agentMode, setAgentMode] = useState("plan");
   const [isLaunching, setIsLaunching] = useState(false);
+
+  const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
+  const [acceptingRunId, setAcceptingRunId] = useState<string | null>(null);
+  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("squash");
 
   useEffect(() => {
     if (taskId) {
@@ -63,6 +68,33 @@ export function TaskDetailsPage() {
       alert("Failed to launch run. Check console for details.");
     } finally {
       setIsLaunching(false);
+    }
+  };
+
+  const handleDeleteRun = async (runId: string) => {
+    if (!taskId) return;
+    try {
+      await deleteRun(taskId, runId);
+      setRuns(runs.filter(r => r.id !== runId));
+    } catch (err) {
+      console.error("Failed to delete run", err);
+      alert("Failed to delete run.");
+    } finally {
+      setDeletingRunId(null);
+    }
+  };
+
+  const handleAcceptRun = async (runId: string) => {
+    if (!taskId) return;
+    try {
+      await acceptRun(taskId, runId, mergeStrategy);
+      const updatedRuns = await getRuns(taskId);
+      setRuns(updatedRuns);
+    } catch (err) {
+      console.error("Failed to accept run", err);
+      alert("Failed to accept run.");
+    } finally {
+      setAcceptingRunId(null);
     }
   };
 
@@ -156,14 +188,13 @@ export function TaskDetailsPage() {
           : (
             <div className="grid gap-4">
               {runs.map((run) => (
-                <Link
+                <div
                   key={run.id}
-                  to={`/tasks/${taskId}/runs/${run.id}`}
-                  className="block bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+                  className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col gap-4"
                 >
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center cursor-pointer" onClick={() => navigate(`/tasks/${taskId}/runs/${run.id}`)}>
                     <div>
-                      <div className="font-medium">Run #{run.id}</div>
+                      <div className="font-medium text-blue-600 hover:underline">Run #{run.id}</div>
                       <div className="text-sm text-gray-500">
                         {run.createdAt
                           ? new Date(run.createdAt).toLocaleString()
@@ -184,7 +215,46 @@ export function TaskDetailsPage() {
                       {run.status}
                     </span>
                   </div>
-                </Link>
+
+                  <div className="flex items-center gap-2 border-t pt-3">
+                    {deletingRunId === run.id ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-red-600 font-medium">Are you sure?</span>
+                        <button onClick={() => handleDeleteRun(run.id)} className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700">Confirm</button>
+                        <button onClick={() => setDeletingRunId(null)} className="px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Cancel</button>
+                      </div>
+                    ) : acceptingRunId === run.id ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <select
+                          value={mergeStrategy}
+                          onChange={(e) => setMergeStrategy(e.target.value as any)}
+                          className="border border-gray-300 rounded px-2 py-1"
+                        >
+                          <option value="squash">Squash</option>
+                          <option value="merge">Merge</option>
+                          <option value="rebase">Rebase</option>
+                        </select>
+                        <button onClick={() => handleAcceptRun(run.id)} className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">Confirm Accept</button>
+                        <button onClick={() => setAcceptingRunId(null)} className="px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300">Cancel</button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setAcceptingRunId(run.id)}
+                          className="text-sm text-green-600 hover:text-green-800 font-medium"
+                        >
+                          Accept Run
+                        </button>
+                        <button
+                          onClick={() => setDeletingRunId(run.id)}
+                          className="text-sm text-red-600 hover:text-red-800 font-medium ml-auto"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
