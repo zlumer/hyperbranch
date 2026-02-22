@@ -16,6 +16,7 @@
     "jsr:@std/testing@^1.0.17": "1.0.17",
     "jsr:@std/toml@^1.0.11": "1.0.11",
     "jsr:@std/yaml@^1.0.11": "1.0.11",
+    "npm:@opencode-ai/sdk@*": "1.2.10",
     "npm:zod@^4.3.6": "4.3.6"
   },
   "jsr": {
@@ -85,6 +86,9 @@
     }
   },
   "npm": {
+    "@opencode-ai/sdk@1.2.10": {
+      "integrity": "sha512-SyXcVqry2hitPVvQtvXOhqsWyFhSycG/+LTLYXrcq8AFmd9FR7dyBSDB3f5Ol6IPkYOegk8P2Eg2kKPNSNiKGw=="
+    },
     "zod@4.3.6": {
       "integrity": "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="
     }

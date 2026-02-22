@@ -3,6 +3,7 @@ import { upgradeWebSocket } from "hono/deno";
 import * as Tasks from "../../services/tasks.ts";
 import * as Runs from "../../services/runs.ts";
 import { getRunBranchName } from "../../utils/branch-naming.ts";
+import { createOpencodeClient } from "npm:@opencode-ai/sdk";
 
 const app = new Hono();
 
@@ -57,6 +58,70 @@ app.post("/:id/run", async (c) => {
   const body = await c.req.json().catch(() => ({})); 
 
   const result = await Runs.run(id, body);
+  
+  if (body.prompt) {
+    // Start background routine for prompt injection
+    (async () => {
+      const { runId, port } = result;
+      const { prompt, agentMode } = body;
+      const timeout = 120000; // 2 minutes
+      const startTime = Date.now();
+      let healthy = false;
+
+      while (Date.now() - startTime < timeout) {
+        try {
+          const res = await fetch(`http://localhost:${port}/global/health`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.healthy) {
+              healthy = true;
+              break;
+            }
+          }
+        } catch (_) {
+          // ignore network errors
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
+      if (!healthy) {
+        console.error(`[run ${runId}] Health check timeout.`);
+        await Runs.stopRun(runId).catch(() => {});
+        return;
+      }
+
+      try {
+        const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` });
+        
+        // Create session
+        const session = await client.session.create({});
+        if (session.error) {
+          throw new Error(`Session create error: ${JSON.stringify(session.error)}`);
+        }
+        
+        const sessionId = session.data.id;
+        
+        // Inject prompt
+        const promptRes = await client.session.prompt({
+          path: { id: sessionId },
+          body: {
+            agent: agentMode || "build",
+            parts: [{ type: "text", text: prompt }]
+          }
+        });
+        
+        if (promptRes.error) {
+          throw new Error(`Prompt injection error: ${JSON.stringify(promptRes.error)}`);
+        }
+        
+        console.log(`[run ${runId}] Successfully injected prompt.`);
+      } catch (e) {
+        console.error(`[run ${runId}] SDK prompt injection failed:`, e);
+        await Runs.stopRun(runId).catch(() => {});
+      }
+    })();
+  }
+
   return c.json(result);
 });
 
