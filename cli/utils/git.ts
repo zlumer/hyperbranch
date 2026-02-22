@@ -183,9 +183,12 @@ export async function listTaskRunBranches(taskId: string): Promise<string[]> {
 
 export async function merge(
   branch: string,
-  strategy: "merge" | "squash" | "rebase" = "merge",
+  strategy: "merge" | "squash" | "ff" = "merge",
 ): Promise<void> {
-  const args = [strategy === "rebase" ? "rebase" : "merge"];
+  const args = ["merge"]
+  if (strategy === "ff") {
+	args.push("--ff-only");
+  }
   if (strategy === "squash") {
     args.push("--squash");
   }
@@ -208,9 +211,6 @@ export async function merge(
   // - Rebase: git rebase Main RunBranch (Rebases RunBranch onto Main) -> Then fast-forward merge Main to RunBranch?
 
   // Let's stick to Merge and Squash for now as they modify the current branch.
-  if (strategy === "rebase") {
-    throw new Error("Rebase strategy not supported in this context yet.");
-  }
 
   await git(args);
 }
