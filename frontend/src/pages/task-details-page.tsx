@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRuns, getTask, getRunsStatusWebSocketUrl, type Run, type Task } from "../api/service";
+import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, type Run, type Task } from "../api/service";
 
 export function TaskDetailsPage() {
   const { taskId } = useParams();
@@ -8,12 +8,19 @@ export function TaskDetailsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [showConfig, setShowConfig] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [agentMode, setAgentMode] = useState("plan");
+  const [isLaunching, setIsLaunching] = useState(false);
+
   useEffect(() => {
     if (taskId) {
       Promise.all([getTask(taskId), getRuns(taskId)])
         .then(([taskData, runsData]) => {
           setTask(taskData);
           setRuns(runsData);
+          setPrompt(`@.hyperbranch/tasks/task-${taskId}.md Please plan and execute this task.`);
+          setAgentMode(taskData.status === "build" ? "build" : "plan");
         })
         .catch((error) => console.error(error))
         .finally(() => setLoading(false));
@@ -24,7 +31,7 @@ export function TaskDetailsPage() {
           const message = JSON.parse(event.data);
           if (message.type === "runs_update" && Array.isArray(message.data)) {
             // Map backend run objects to frontend Run interface
-            const updatedRuns = message.data.map((r: any) => ({
+            const updatedRuns = message.data.map((r: { runId: string, status: string }) => ({
               id: r.runId,
               taskId,
               status: r.status,
@@ -42,6 +49,22 @@ export function TaskDetailsPage() {
       };
     }
   }, [taskId]);
+
+  const handleLaunchRun = async () => {
+    if (!taskId) return;
+    setIsLaunching(true);
+    try {
+      await launchRun(taskId, { prompt, agentMode });
+      setShowConfig(false);
+      const updatedRuns = await getRuns(taskId);
+      setRuns(updatedRuns);
+    } catch (err) {
+      console.error("Failed to launch run", err);
+      alert("Failed to launch run. Check console for details.");
+    } finally {
+      setIsLaunching(false);
+    }
+  };
 
   if (loading) return <div className="p-8">Loading...</div>;
   if (!task) return <div className="p-8">Task not found</div>;
@@ -79,7 +102,55 @@ export function TaskDetailsPage() {
       </div>
 
       <div>
-        <h2 className="text-2xl font-bold mb-4">Runs</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Runs</h2>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 transition-colors"
+          >
+            Launch Run
+          </button>
+        </div>
+
+        {showConfig && (
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+            <h3 className="text-lg font-medium mb-3">Launch Configuration</h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Run Prompt
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500"
+                rows={3}
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Agent Mode
+              </label>
+              <select
+                value={agentMode}
+                onChange={(e) => setAgentMode(e.target.value)}
+                className="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                <option value="plan">Plan</option>
+                <option value="build">Build</option>
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleLaunchRun}
+                disabled={isLaunching}
+                className="bg-green-600 text-white px-4 py-2 rounded font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {isLaunching ? "Launching..." : "Confirm Launch"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {runs.length === 0
           ? <p className="text-gray-500">No runs found for this task.</p>
           : (

@@ -111,6 +111,20 @@ export const getRuns = async (taskId: string): Promise<Run[]> => {
   }));
 };
 
+export const launchRun = async (
+  taskId: string,
+  payload: { prompt: string; agentMode: string },
+): Promise<Run> => {
+  const res = await apiClient.post(`/tasks/${taskId}/run`, payload);
+  const r = res.data;
+  return {
+    id: r.runId,
+    taskId,
+    status: r.status,
+    createdAt: "",
+  };
+};
+
 export const getRun = async (taskId: string, runId: string): Promise<Run> => {
   const runs = await getRuns(taskId);
   const run = runs.find((r) => String(r.id) === String(runId));
