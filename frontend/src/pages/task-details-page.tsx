@@ -60,7 +60,7 @@ export function TaskDetailsPage() {
     if (!taskId) return;
     setIsLaunching(true);
     try {
-      await launchRun(taskId, { prompt, agentMode });
+      await launchRun(taskId, { prompt, agentMode, commit: true });
       setShowConfig(false);
       const updatedRuns = await getRuns(taskId);
       setRuns(updatedRuns);
