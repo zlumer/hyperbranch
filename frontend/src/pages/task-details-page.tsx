@@ -25,7 +25,7 @@ export function TaskDetailsPage() {
         .then(([taskData, runsData]) => {
           setTask(taskData);
           setRuns(runsData);
-          setPrompt(`@.hyperbranch/tasks/task-${taskId}.md @.hyperbranch/tasks/task-6a3-gqh-h0y.md Plan this task. Ask me 10+ questions to better understand the task and clear up assumptions and remove ambiguities.`);
+          setPrompt(`@.hyperbranch/tasks/task-${taskId}.md Plan this task. Ask me questions to better understand the task and clear up assumptions and remove ambiguities. Continue asking questions (using "ask question" tool) until 100% certain in the task and plan.`);
           setAgentMode(taskData.status === "build" ? "build" : "plan");
         })
         .catch((error) => console.error(error))
