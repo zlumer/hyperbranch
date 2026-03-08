@@ -61,9 +61,11 @@ export function RunWorkspacePage() {
           <div className="h-4 w-px bg-gray-300"></div>
           <div className="text-sm font-semibold text-gray-700">Run #{run.id}</div>
           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-            run.status === "success" ? "bg-green-100 text-green-800" :
+            run.status === "completed" ? "bg-green-100 text-green-800" :
             run.status === "failed" ? "bg-red-100 text-red-800" :
-            run.status === "running" ? "bg-yellow-100 text-yellow-800" :
+            run.status === "working" || run.status === "starting" ? "bg-yellow-100 text-yellow-800" :
+            run.status === "paused" ? "bg-orange-100 text-orange-800" :
+            run.status === "stopped" ? "bg-gray-200 text-gray-800" :
             "bg-gray-100 text-gray-800"
           }`}>
             {run.status}

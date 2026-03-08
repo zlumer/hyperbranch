@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, type Run, type Task } from "../api/service";
+import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, resumeRun, stopRun, type Run, type Task } from "../api/service";
 import { RunLaunchConfig } from "../components/RunLaunchConfig";
 import { RunListItem } from "../components/RunListItem";
 
@@ -99,6 +99,30 @@ export function TaskDetailsPage() {
     }
   };
 
+  const handleResumeRun = async (runId: string) => {
+    if (!taskId) return;
+    try {
+      await resumeRun(taskId, runId);
+      const updatedRuns = await getRuns(taskId);
+      setRuns(updatedRuns);
+    } catch (err) {
+      console.error("Failed to resume run", err);
+      alert("Failed to resume run.");
+    }
+  };
+
+  const handleStopRun = async (runId: string) => {
+    if (!taskId) return;
+    try {
+      await stopRun(taskId, runId);
+      const updatedRuns = await getRuns(taskId);
+      setRuns(updatedRuns);
+    } catch (err) {
+      console.error("Failed to stop run", err);
+      alert("Failed to stop run.");
+    }
+  };
+
   if (loading) return <div className="p-8">Loading...</div>;
   if (!task) return <div className="p-8">Task not found</div>;
 
@@ -173,6 +197,8 @@ export function TaskDetailsPage() {
                   setMergeStrategy={setMergeStrategy}
                   onDelete={handleDeleteRun}
                   onAccept={handleAcceptRun}
+                  onResume={handleResumeRun}
+                  onStop={handleStopRun}
                 />
               ))}
             </div>

@@ -137,6 +137,14 @@ export const getRunPort = async (taskId: string, runId: string): Promise<number>
   return res.data.port;
 };
 
+export const resumeRun = async (taskId: string, runId: string): Promise<void> => {
+  await apiClient.post(`/tasks/${taskId}/runs/${runId}/resume`);
+};
+
+export const stopRun = async (taskId: string, runId: string): Promise<void> => {
+  await apiClient.post(`/tasks/${taskId}/runs/${runId}/stop`);
+};
+
 export const deleteRun = async (taskId: string, runId: string): Promise<void> => {
   await apiClient.delete(`/tasks/${taskId}/runs/${runId}`);
 };
