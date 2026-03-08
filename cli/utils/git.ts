@@ -287,6 +287,22 @@ export async function getUnmergedCommits(
   return await git(["log", `${branch}`, `^${base}`, "--oneline"]);
 }
 
+export async function getDrift(
+  cwd: string,
+  baseBranch: string,
+): Promise<{ ahead: number; behind: number }> {
+  try {
+    const output = await git(
+      ["rev-list", "--left-right", "--count", `HEAD...origin/${baseBranch}`],
+      cwd,
+    );
+    const [ahead, behind] = output.split("\t").map((n) => parseInt(n, 10));
+    return { ahead: ahead || 0, behind: behind || 0 };
+  } catch {
+    return { ahead: 0, behind: 0 };
+  }
+}
+
 export async function getConfig(key: string): Promise<string | null> {
   try {
     return await git(["config", "--get", key]);

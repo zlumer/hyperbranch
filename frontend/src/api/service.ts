@@ -15,6 +15,7 @@ export interface Run {
   taskId: string;
   status: string;
   createdAt: string;
+  drift?: { ahead: number; behind: number };
 }
 
 export interface FileNode {
@@ -108,6 +109,7 @@ export const getRuns = async (taskId: string): Promise<Run[]> => {
     taskId,
     status: r.status,
     createdAt: "",
+    drift: r.drift,
   }));
 };
 
@@ -151,6 +153,10 @@ export const deleteRun = async (taskId: string, runId: string): Promise<void> =>
 
 export const acceptRun = async (taskId: string, runId: string, strategy: "merge" | "squash" | "rebase"): Promise<void> => {
   await apiClient.post(`/tasks/${taskId}/runs/${runId}/merge`, { strategy });
+};
+
+export const pullRun = async (taskId: string, runId: string, strategy: "merge" | "rebase"): Promise<void> => {
+  await apiClient.post(`/tasks/${taskId}/runs/${runId}/pull`, { strategy });
 };
 
 export const getFiles = async (

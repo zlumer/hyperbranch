@@ -295,6 +295,27 @@ app.post("/:id/runs/:runId/merge", async (c) => {
   }
 });
 
+// Pull run
+app.post("/:id/runs/:runId/pull", async (c) => {
+  const id = c.req.param("id");
+  const runId = c.req.param("runId");
+  const body = await c.req.json().catch(() => ({}));
+  const { strategy } = body;
+
+  let branch = runId;
+  if (!isNaN(Number(runId))) {
+    branch = getRunBranchName(id, Number(runId));
+  }
+
+  try {
+    await Runs.pullRun(id, branch, strategy);
+    return c.json({ message: "Pull successful" });
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 400);
+  }
+});
+
 // Get run port
 app.get("/:id/runs/:runId/port", async (c) => {
   const id = c.req.param("id");

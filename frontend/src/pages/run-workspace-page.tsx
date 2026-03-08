@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { getRun, getRunPort, acceptRun, type Run } from "../api/service";
+import { getRun, getRunPort, acceptRun, pullRun, type Run } from "../api/service";
 
 export function RunWorkspacePage() {
   const { taskId, runId } = useParams();
@@ -9,7 +9,9 @@ export function RunWorkspacePage() {
   const [port, setPort] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("squash");
+  const [pullStrategy, setPullStrategy] = useState<"merge" | "rebase">("rebase");
 
   useEffect(() => {
     if (taskId && runId) {
@@ -44,6 +46,20 @@ export function RunWorkspacePage() {
     }
   };
 
+  const handlePullRun = async () => {
+    if (!taskId || !runId) return;
+    try {
+      await pullRun(taskId, runId, pullStrategy);
+      setPulling(false);
+      // Reload run data to get updated drift
+      const runData = await getRun(taskId, runId);
+      setRun(runData);
+    } catch (err) {
+      console.error("Failed to pull run", err);
+      alert("Failed to pull run.");
+    }
+  };
+
   if (loading) return <div className="p-8">Loading workspace...</div>;
   if (!run || !taskId) return <div className="p-8">Run not found</div>;
 
@@ -70,9 +86,49 @@ export function RunWorkspacePage() {
           }`}>
             {run.status}
           </span>
+          {run.drift && (
+            <span className="text-sm text-gray-500 font-medium">
+              ({run.drift.behind}↓ {run.drift.ahead}↑)
+            </span>
+          )}
         </div>
         
         <div className="flex items-center gap-2 text-sm">
+          {run.drift && run.drift.behind > 0 && (
+            pulling ? (
+              <div className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded border border-blue-200 mr-2">
+                <span className="text-blue-600 font-medium">Pull:</span>
+                <select
+                  value={pullStrategy}
+                  onChange={(e) => setPullStrategy(e.target.value as any)}
+                  className="border border-blue-300 rounded px-2 py-1 bg-white text-sm"
+                >
+                  <option value="merge">Merge</option>
+                  <option value="rebase">Rebase</option>
+                </select>
+                <button 
+                  onClick={handlePullRun} 
+                  className="px-3 py-1 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 ml-1"
+                >
+                  Confirm
+                </button>
+                <button 
+                  onClick={() => setPulling(false)} 
+                  className="px-3 py-1 bg-white text-gray-700 border border-gray-300 rounded font-medium hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setPulling(true)}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium shadow-sm transition-colors mr-2 flex items-center gap-1"
+              >
+                <span>Pull</span>
+                <span className="bg-blue-700 px-1.5 py-0.5 rounded-full text-xs">{run.drift.behind}↓</span>
+              </button>
+            )
+          )}
           {accepting ? (
             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded border border-gray-200">
               <span className="text-gray-600 font-medium">Strategy:</span>

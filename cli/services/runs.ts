@@ -2,6 +2,8 @@ import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Lifecycle from "../runtime/lifecycle.ts";
+import * as Docker from "../utils/docker.ts";
+import * as Compose from "../utils/docker-compose.ts";
 import { getRunContext } from "../runtime/context.ts";
 import { parseRunNumber, splitRunBranchName, getRunBranchName as parseRunBranchName } from "../utils/branch-naming.ts";
 
@@ -110,11 +112,14 @@ export interface RunInfo {
   branchName: string;
   status: string;
   logsPath: string; // Deprecated
+  drift?: { ahead: number; behind: number };
 }
 
 export async function listRuns(taskId: string): Promise<RunInfo[]> {
   const branches = await Git.listTaskRunBranches(taskId);
   const runs: RunInfo[] = [];
+
+  const baseBranch = await Git.resolveBaseBranch(taskId);
 
   for (const branch of branches) {
     const runIdx = splitRunBranchName(branch)?.runIndex;
@@ -123,6 +128,16 @@ export async function listRuns(taskId: string): Promise<RunInfo[]> {
     const ctx = getRunContext(taskId, runIdx);
     const status = await Lifecycle.getRunState(ctx);
     
+    let drift;
+    if (await exists(ctx.clonePath)) {
+      try {
+        await Git.git(["fetch", "origin", baseBranch], ctx.clonePath);
+        drift = await Git.getDrift(ctx.clonePath, baseBranch);
+      } catch (e) {
+        // ignore fetch errors
+      }
+    }
+
     runs.push({
       runId: branch,
       branchName: branch,
@@ -130,6 +145,7 @@ export async function listRuns(taskId: string): Promise<RunInfo[]> {
       // logsPath is deprecated but kept for compatibility if needed, 
       // but ideally consumers should use the logs API
       logsPath: "", 
+      drift,
     });
   }
   return runs;
@@ -186,6 +202,52 @@ export async function mergeRun(
   await destroyRun(runId);
   
   return { cleanupSkipped: false };
+}
+
+export async function pullRun(
+  taskId: string,
+  runId: string,
+  strategy: "merge" | "rebase" = "rebase",
+): Promise<void> {
+  const { runIndex } = parseRunId(runId);
+  const ctx = getRunContext(taskId, runIndex);
+
+  if (!(await exists(ctx.clonePath))) {
+    throw new Error(`Run clone not found at ${ctx.clonePath}`);
+  }
+
+  const baseBranch = await Git.resolveBaseBranch(taskId);
+
+  // 1. Fetch on host
+  await Git.git(["fetch", "origin", baseBranch], ctx.clonePath);
+
+  // 2. Execute git pull inside container
+  const containerId = await Compose.getServiceContainerId(
+    ctx.paths.runDir,
+    ctx.paths.composeFile,
+    "task",
+    ctx.dockerProjectName
+  );
+
+  if (!containerId) {
+    throw new Error(`Container for run ${runId} not found or not running`);
+  }
+
+  // Set git config inside container to avoid errors if not configured globally
+  const gitName = await Git.getConfig("user.name") || "Hyperbranch";
+  const gitEmail = await Git.getConfig("user.email") || "bot@hyperbranch.com";
+  await Docker.execContainer(containerId, ["git", "config", "user.name", gitName], { workdir: "/app" });
+  await Docker.execContainer(containerId, ["git", "config", "user.email", gitEmail], { workdir: "/app" });
+
+  try {
+    if (strategy === "rebase") {
+      await Docker.execContainer(containerId, ["git", "rebase", `origin/${baseBranch}`], { workdir: "/app" });
+    } else {
+      await Docker.execContainer(containerId, ["git", "merge", `origin/${baseBranch}`], { workdir: "/app" });
+    }
+  } catch (e) {
+    throw new Error(`Failed to ${strategy} base branch in container: ${e}`);
+  }
 }
 
 // Helpers

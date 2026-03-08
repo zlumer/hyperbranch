@@ -212,6 +212,20 @@ export function unpauseContainer(cid: string) {
   return dcmd(["unpause", cid], { stdout: "null", stderr: "inherit" })
 }
 
+export async function execContainer(cid: string, cmd: string[], options?: { workdir?: string }): Promise<void> {
+  const args = ["exec"]
+  if (options?.workdir) {
+    args.push("-w", options.workdir)
+  }
+  args.push(cid, ...cmd)
+  
+  const output = await dcmd(args, { stdout: "piped", stderr: "piped" })
+  if (!output.success) {
+    const stderr = new TextDecoder().decode(output.stderr).trim()
+    throw new Error(`Docker exec failed: ${stderr}`)
+  }
+}
+
 // Class wrapper for compatibility and convenience
 export class DockerContainerProcess {
   constructor(public cid: string) {}
