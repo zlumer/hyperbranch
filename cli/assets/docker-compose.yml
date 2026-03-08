@@ -5,6 +5,8 @@ services:
       context: .
       dockerfile: Dockerfile
     entrypoint: ["/entrypoint.sh"]
+    # map user and group IDs to avoid permission issues with bind mounts
+    user: "${UID}:${GID}"
     env_file:
       - .env.compose
       - .env
