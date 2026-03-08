@@ -1,3 +1,4 @@
+import { exists } from "@std/fs/exists";
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Lifecycle from "../runtime/lifecycle.ts";
@@ -23,9 +24,20 @@ export async function run(
   // 1. Determine next run index
   // We need to look at existing branches to find the next index
   const nextBranch = await Git.getNextRunBranch(taskId);
-  const runIndex = parseRunNumber(nextBranch) || 1;
+  let runIndex = parseRunNumber(nextBranch) || 1;
 
-  const ctx = getRunContext(taskId, runIndex);
+  let ctx = getRunContext(taskId, runIndex);
+
+  let iterations = 0;
+  while (await exists(ctx.clonePath)) {
+    console.warn(`⚠️  Found stale run directory at ${ctx.clonePath}. Bumping run index to avoid conflicts.`);
+    runIndex++;
+    ctx = getRunContext(taskId, runIndex);
+    iterations++;
+    if (iterations > 100) {
+      throw new Error(`Could not find an available run index after 100 attempts. (Last path: ${ctx.clonePath})`);
+    }
+  }
 
   // 2. Prepare
   await Lifecycle.prepare(ctx, options);
