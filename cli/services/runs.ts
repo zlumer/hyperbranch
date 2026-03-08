@@ -99,6 +99,12 @@ export async function getStatus(runId: string): Promise<string> {
   return status;
 }
 
+export async function resumeRun(runId: string): Promise<void> {
+  const { taskId, runIndex } = parseRunId(runId);
+  const ctx = getRunContext(taskId, runIndex);
+  await Lifecycle.start(ctx);
+}
+
 export interface RunInfo {
   runId: string;
   branchName: string;

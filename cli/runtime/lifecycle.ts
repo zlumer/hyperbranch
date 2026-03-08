@@ -240,10 +240,17 @@ export async function getRunState(ctx: RunContext): Promise<RunState> {
         return "failed";
     }
     
+    if (status === "paused") {
+        return "paused";
+    }
+    
     // Fallback for weird states (dead, paused, removing)
-    return "failed";
+    return "paused";
   }
 
   // 4. No container, but artifacts exist
+  if (composeFileExists) {
+      return "stopped";
+  }
   return "preparing";
 }

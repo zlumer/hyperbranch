@@ -151,6 +151,26 @@ app.post("/:id/stop", async (c) => {
   }
 });
 
+// Resume task run
+app.post("/:id/runs/:runId/resume", async (c) => {
+  const id = c.req.param("id");
+  const runId = c.req.param("runId");
+  
+  // Resolve runId (handle plain index vs branch name)
+  let branch = runId;
+  if (!isNaN(Number(runId))) {
+    branch = getRunBranchName(id, Number(runId));
+  }
+
+  try {
+    await Runs.resumeRun(branch);
+    return c.json({ message: "Run resumed" });
+  } catch (e) {
+    const error = e as Error;
+    return c.json({ error: error.message }, 400);
+  }
+});
+
 function createLogStreamHandler(getRunId: (c: Context) => Promise<string | null>) {
   return upgradeWebSocket((c) => {
     let child: Deno.ChildProcess | null = null;

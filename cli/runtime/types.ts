@@ -4,6 +4,8 @@ export type RunState =
   | "preparing"  // Git branch/clone exists, container missing
   | "starting"   // Container created/starting
   | "working"    // Container running
+  | "paused"     // Container exists but is paused/exited
+  | "stopped"    // Container missing but artifacts exist
   | "completed"  // Container exited (0) or signaled completion
   | "failed"     // Container exited (non-0)
   | "merged"     // Merged but not cleaned up
