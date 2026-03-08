@@ -23,8 +23,11 @@ export async function mergeCommand(args: any) {
 
   try {
     console.log(`Merging run ${runId} using strategy '${strategy}'...`);
-    await Runs.mergeRun(taskId, runId, strategy, cleanup);
+    const { cleanupSkipped } = await Runs.mergeRun(taskId, runId, strategy, cleanup);
     console.log("✅ Merge successful.");
+    if (cleanupSkipped) {
+      console.log("⚠️ Cleanup skipped: Run has uncommitted changes.");
+    }
   } catch (error: any) {
     console.error(`❌ Merge failed: ${error.message}`);
     Deno.exit(1);

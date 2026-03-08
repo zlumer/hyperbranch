@@ -1,4 +1,5 @@
 import * as Git from "../utils/git.ts";
+import * as GitClones from "../utils/git-clones.ts";
 import * as Lifecycle from "../runtime/lifecycle.ts";
 import { getRunContext } from "../runtime/context.ts";
 import { parseRunNumber, splitRunBranchName, getRunBranchName as parseRunBranchName } from "../utils/branch-naming.ts";
@@ -139,7 +140,7 @@ export async function mergeRun(
   runId: string,
   strategy: "merge" | "squash" | "ff",
   cleanup: boolean = false,
-): Promise<void> {
+): Promise<{ cleanupSkipped: boolean }> {
   const baseBranch = await Git.resolveBaseBranch(taskId);
   const currentBranch = await Git.getCurrentBranch();
 
@@ -154,9 +155,19 @@ export async function mergeRun(
   await Git.fetch(remoteName, `${runId}:${runId}`);
   await Git.merge(runId, strategy);
 
-  if (cleanup) {
-    await destroyRun(runId);
+  if (!cleanup)
+    return { cleanupSkipped: false }
+
+  if (branchInfo) {
+    const ctx = getRunContext(branchInfo.taskId, branchInfo.runIndex);
+    const isDirty = await GitClones.status(ctx.clonePath);
+    if (isDirty)
+      return { cleanupSkipped: true }
   }
+
+  await destroyRun(runId);
+  
+  return { cleanupSkipped: false };
 }
 
 // Helpers
