@@ -8,6 +8,7 @@ export type RunState =
   | "working"    // Container running
   | "paused"     // Container exists but is paused/exited
   | "stopped"    // Container missing but artifacts exist
+  | "orphaned"   // Artifacts exist but branch is missing
   | "completed"  // Container exited (0) or signaled completion
   | "failed"     // Container exited (non-0)
   | "merged"     // Merged but not cleaned up
