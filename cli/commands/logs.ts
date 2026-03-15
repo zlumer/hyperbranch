@@ -5,6 +5,7 @@ import { RunId, TaskId } from "../utils/id.ts";
 
 export async function logsCommand(args: Args)
 {
+	// AI! zod validate for args
 	const task = TaskId.from(args._[1] as string);
 	let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
 
