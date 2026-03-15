@@ -25,7 +25,7 @@ export function parseTaskOrRunId(idStr: string | undefined, runIndex?: number | 
 		return { taskId: shortBranchMatch[1], hasRunIndex: true, runIndex: overrideRunIndex ? runIndex : parseInt(shortBranchMatch[2], 10) }
 
 	// parse slug format: "hb-<taskId>-<runIndex>"
-	const slugMatch = idStr.match(/^(\w+)-(\d+)$/)
+	const slugMatch = idStr.match(/^([\w-]+)-(\d+)$/)
 	if (!branchNameMode && slugMatch)
 		return { taskId: slugMatch[1], hasRunIndex: true, runIndex: overrideRunIndex ? runIndex : parseInt(slugMatch[2], 10) }
 

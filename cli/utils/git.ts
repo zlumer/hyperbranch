@@ -112,10 +112,7 @@ export async function resolveBaseBranch(taskId: TaskId): Promise<string> {
 export async function getNextRunBranch(task: TaskId): Promise<RunId> {
   const prefix = task.runBranchPrefix()
   try {
-    const output = await git(["branch", "--list", `${prefix}*`]);
-    const branches = output.split("\n").map((b) =>
-      b.trim().replace(/^[\*\+]\s+/, "")
-    );
+    const branches = await getBranchesByPrefix(prefix);
 
     let maxIdx = 0;
     for (const branch of branches) {
@@ -131,15 +128,22 @@ export async function getNextRunBranch(task: TaskId): Promise<RunId> {
   }
 }
 
+async function getBranchesByPrefix(prefix: string) {
+	const output = await git(["branch", "-a", "--list", `*${prefix}*`]);
+  const branches = output.split("\n").map((b) =>
+    b.trim()
+      .replace(/^[\*\+]\s+/, "")
+      .replace(/^remotes\/[^/]+\//, "")
+  ).filter(Boolean);
+  return branches;
+}
+
 export async function getLatestRunBranch(
   taskId: TaskId,
 ): Promise<RunId | null> {
   try {
-    const output = await git(["branch", "--list", `${taskId.runBranchPrefix()}*`]);
-    const branches = output.split("\n").map((b) =>
-      b.trim().replace(/^[\*\+]\s+/, "")
-    ).filter(Boolean);
-
+    const branches = await getBranchesByPrefix(taskId.runBranchPrefix());
+    
     if (branches.length === 0) return null;
 
     let maxIdx = -1;
@@ -165,10 +169,7 @@ export async function getLatestRunBranch(
 export async function listTaskRunBranches(taskId: TaskId): Promise<string[]> {
   const prefix = taskId.runBranchPrefix()
   try {
-    const output = await git(["branch", "--list", `${prefix}*`]);
-    const branches = output.split("\n").map((b) =>
-      b.trim().replace(/^[\*\+]\s+/, "")
-    ).filter(Boolean);
+    const branches = await getBranchesByPrefix(prefix);
     return branches.sort((a, b) => {
       const idxA = RunId.fromString(a)?.idx || 0;
       const idxB = RunId.fromString(b)?.idx || 0;
