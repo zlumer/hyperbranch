@@ -1,22 +1,21 @@
 import { join, resolve } from "@std/path";
-import { getRunBranchName } from "../utils/branch-naming.ts";
 import { getRunDir as getRunDirFromClone, RUNS_DIR, TASKS_DIR } from "../utils/paths.ts";
 import { RunContext } from "./types.ts";
+import { RunId } from "../utils/id.ts";
 
-export function getRunContext(taskId: string, runIndex: number): RunContext
+export function getRunContext(run: RunId): RunContext
 {
-	const branchName = getRunBranchName(taskId, runIndex);
+	const branchName = run.toBranchName();
 	// Replace slashes with dashes for filesystem safety
 	const cloneDirName = branchName.replace(/\//g, "-");
 	const clonePath = resolve(RUNS_DIR(), cloneDirName);
 	const runDir = getRunDirFromClone(clonePath);
-	const dockerProjectName = `hb-${taskId}-${runIndex}`;
+	const dockerProjectName = run.toDirectorySlug()
     // Assuming a 'runs' directory under tasks for summaries
-	const summaryPath = join(TASKS_DIR(), "runs", `${taskId}-${runIndex}.json`);
+	const summaryPath = join(TASKS_DIR(), "runs", `${run.toDirectorySlug()}.json`);
 
 	return {
-		taskId,
-		runIndex,
+		runId: run,
 		branchName,
 		clonePath,
 		dockerProjectName,

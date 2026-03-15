@@ -1,5 +1,6 @@
 import { join } from "@std/path"
 import { TASKS_DIR } from "./paths.ts"
+import { TaskId } from "./id.ts";
 
 // --- ID Generation ---
 export function generateTaskId(): string
@@ -18,15 +19,15 @@ export function getTaskPath(id: string): string
 	return join(TASKS_DIR(), `task-${id}.md`)
 }
 
-export async function scanTasks(): Promise<string[]> {
+export async function scanTasks(): Promise<TaskId[]> {
 	const tasksDir = TASKS_DIR()
-	const taskIds: string[] = []
+	const taskIds: TaskId[] = []
 
 	try {
 		for await (const entry of Deno.readDir(tasksDir)) {
 			if (entry.isFile && entry.name.startsWith("task-") && entry.name.endsWith(".md")) {
 				// Extract ID: task-<id>.md
-				const id = entry.name.slice(5, -3)
+				const id = TaskId.from(entry.name.slice(5, -3))
 				if (id) {
 					taskIds.push(id)
 				}

@@ -1,6 +1,6 @@
 import { git } from "./git.ts";
-import { splitRunBranchName } from "./branch-naming.ts";
 import { exists } from "@std/fs/exists";
+import { RunId } from "./id.ts";
 
 export async function createClone(
   branch: string,
@@ -20,14 +20,14 @@ export async function createClone(
   );
 
   // c) add a remote to the main repo pointing to the clone: `git remote add hb-<task>-<run> <clonePath>`
-  const branchInfo = splitRunBranchName(branch);
+  const branchInfo = RunId.fromString(branch)
   if (!branchInfo) {
     throw new Error(`Invalid branch name format for clone: ${branch}`);
   }
-  const { taskId, runIndex } = branchInfo;
-  const remoteName = `hb-${taskId}-${runIndex}`;
+//   const { taskId, runIndex } = branchInfo;
+  const remoteDir = branchInfo.toDirectorySlug()
 
-  await git(["remote", "add", remoteName, clonePath], cwd);
+  await git(["remote", "add", remoteDir, clonePath], cwd);
 }
 
 export async function removeClone(
@@ -48,10 +48,9 @@ export async function removeClone(
   }
 
   // b) Remove the remote from the main repo: `git remote remove hb-<task>-<run>`. Ignore errors if remote is already gone.
-  const branchInfo = splitRunBranchName(branch);
+  const branchInfo = RunId.fromString(branch);
   if (branchInfo) {
-    const { taskId, runIndex } = branchInfo;
-    const remoteName = `hb-${taskId}-${runIndex}`;
+    const remoteName = branchInfo.toDirectorySlug();
     try {
       await git(["remote", "remove", remoteName], cwd);
     } catch {

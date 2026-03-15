@@ -2,10 +2,19 @@ import { Hono, Context } from "hono";
 import { upgradeWebSocket } from "hono/deno";
 import * as Tasks from "../../services/tasks.ts";
 import * as Runs from "../../services/runs.ts";
-import { getRunBranchName } from "../../utils/branch-naming.ts";
+import { TaskId, RunId, parseTaskOrRunId } from "../../utils/id.ts";
 import { createOpencodeClient } from "npm:@opencode-ai/sdk";
 
 const app = new Hono();
+
+function parseRouteIds(idStr: string, runIdStr: string) {
+  const taskId = TaskId.from(idStr);
+  let runId = RunId.fromString(runIdStr);
+  if (!runId && taskId && !isNaN(Number(runIdStr))) {
+    runId = taskId.toRunId(Number(runIdStr));
+  }
+  return { taskId, runId };
+}
 
 // List tasks
 app.get("/", async (c) => {
@@ -32,32 +41,43 @@ app.post("/", async (c) => {
 // Get task
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const task = await Tasks.get(id);
+  const taskId = TaskId.from(id);
+  if (!taskId)
+	return c.json({ error: "Invalid task ID" }, 400);
+  const task = await Tasks.get(taskId);
   return c.json(task);
 });
 
 // Update task
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
+  const taskId = TaskId.from(id);
+  if (!taskId)
+	return c.json({ error: "Invalid task ID" }, 400);
   const body = await c.req.json();
-  await Tasks.update(id, body);
-  const updated = await Tasks.get(id);
+  await Tasks.update(taskId, body);
+  const updated = await Tasks.get(taskId);
   return c.json(updated);
 });
 
 // Delete task
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  await Tasks.remove(id);
+  const taskId = TaskId.from(id);
+  if (!taskId)
+	return c.json({ error: "Invalid task ID" }, 400);
+  await Tasks.remove(taskId);
   return c.json(null);
 });
 
 // Run task
 app.post("/:id/run", async (c) => {
   const id = c.req.param("id");
+  const taskId = TaskId.from(id);
+  if (!taskId) return c.json({ error: "Invalid task ID" }, 400);
   const body = await c.req.json().catch(() => ({})); 
 
-  const result = await Runs.run(id, body);
+  const result = await Runs.run(taskId, body);
   
   if (body.prompt) {
     // Start background routine for prompt injection
@@ -86,7 +106,8 @@ app.post("/:id/run", async (c) => {
 
       if (!healthy) {
         console.error(`[run ${runId}] Health check timeout.`);
-        await Runs.stopRun(runId).catch(() => {});
+        const runObj = RunId.fromString(runId);
+        if (runObj) await Runs.stopRun(runObj).catch(() => {});
         return;
       }
 
@@ -117,7 +138,8 @@ app.post("/:id/run", async (c) => {
         console.log(`[run ${runId}] Successfully injected prompt.`);
       } catch (e) {
         console.error(`[run ${runId}] SDK prompt injection failed:`, e);
-        await Runs.stopRun(runId).catch(() => {});
+        const runObj = RunId.fromString(runId);
+        if (runObj) await Runs.stopRun(runObj).catch(() => {});
       }
     })();
   }
@@ -127,23 +149,28 @@ app.post("/:id/run", async (c) => {
 
 // Stop task
 app.post("/:id/stop", async (c) => {
-  const id = c.req.param("id");
-  // Check if id is taskId or runId. 
-  // Runs.stopRun expects runId.
-  // If id is taskId, stop latest? Or maybe we require runId?
-  // Previous implementation used Runs.stopRun(id).
-  // If id is taskId, stopRun needs to handle it.
-  // But Runs.stopRun calls parseRunId which fails if not branch format.
+  const idStr = c.req.param("id");
+  const parsed = parseTaskOrRunId(idStr);
   
-  // Let's assume if id is taskId, we find latest run.
-  let runId = id;
-  const latest = await Runs.getLatestRunId(id);
-  if (latest) {
-      runId = latest;
+  if (!parsed) {
+    return c.json({ error: "Invalid ID format" }, 400);
+  }
+
+  let runIdToStop: RunId | undefined;
+
+  if (parsed.hasRunIndex && parsed.runIndex !== undefined) {
+    runIdToStop = RunId.from(parsed);
+  } else {
+    const taskId = new TaskId(parsed.taskId);
+    runIdToStop = await Runs.getLatestRunId(taskId) || undefined;
   }
   
+  if (!runIdToStop) {
+    return c.json({ error: "No active runs found to stop for task" }, 404);
+  }
+
   try {
-    await Runs.stopRun(runId);
+    await Runs.stopRun(runIdToStop);
     return c.json({ message: "Task stopped" });
   } catch (e) {
     const error = e as Error;
@@ -153,17 +180,11 @@ app.post("/:id/stop", async (c) => {
 
 // Resume task run
 app.post("/:id/runs/:runId/resume", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
-  
-  // Resolve runId (handle plain index vs branch name)
-  let branch = runId;
-  if (!isNaN(Number(runId))) {
-    branch = getRunBranchName(id, Number(runId));
-  }
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
+  if (!runId) return c.json({ error: "Invalid run ID" }, 400);
 
   try {
-    await Runs.resumeRun(branch);
+    await Runs.resumeRun(runId);
     return c.json({ message: "Run resumed" });
   } catch (e) {
     const error = e as Error;
@@ -171,7 +192,7 @@ app.post("/:id/runs/:runId/resume", async (c) => {
   }
 });
 
-function createLogStreamHandler(getRunId: (c: Context) => Promise<string | null>) {
+function createLogStreamHandler(getRunId: (c: Context) => Promise<RunId | null>) {
   return upgradeWebSocket((c) => {
     let child: Deno.ChildProcess | null = null;
     let killed = false;
@@ -241,32 +262,30 @@ function createLogStreamHandler(getRunId: (c: Context) => Promise<string | null>
 app.get(
   "/:id/logs",
   createLogStreamHandler(async (c) => {
-      const id = c.req.param("id");
+      const taskId = TaskId.from(c.req.param("id"));
+      if (!taskId) return null;
       // Try to find latest run for task
-      return await Runs.getLatestRunId(id);
+      return await Runs.getLatestRunId(taskId);
   })
 );
 
 // List runs
 app.get("/:id/runs", async (c) => {
   const id = c.req.param("id");
-  const runs = await Runs.listRuns(id);
+  const taskId = TaskId.from(id);
+  if (!taskId) return c.json({ error: "Invalid task ID" }, 400);
+  const runs = await Runs.listRuns(taskId);
   return c.json(runs);
 });
 
 // Get run files
 app.get("/:id/runs/:runId/files", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
   const path = c.req.query("path") || "";
-
-  let branch = runId;
-  if (!isNaN(Number(runId))) {
-    branch = getRunBranchName(id, Number(runId));
-  }
+  if (!runId) return c.json({ error: "Invalid IDs" }, 400);
 
   try {
-    const result = await Runs.getRunFiles(branch, path);
+    const result = await Runs.getRunFiles(runId.toBranchName(), path);
     return c.json(result);
   } catch (e) {
     const error = e as Error;
@@ -276,18 +295,13 @@ app.get("/:id/runs/:runId/files", async (c) => {
 
 // Merge run
 app.post("/:id/runs/:runId/merge", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
   const body = await c.req.json();
   const { strategy, cleanup } = body;
-
-  let branch = runId;
-  if (!isNaN(Number(runId))) {
-    branch = getRunBranchName(id, Number(runId));
-  }
+  if (!runId) return c.json({ error: "Invalid IDs" }, 400);
 
   try {
-    await Runs.mergeRun(id, branch, strategy, cleanup);
+    await Runs.mergeRun(runId, strategy, cleanup);
     return c.json({ message: "Merge successful" });
   } catch (e) {
     const error = e as Error;
@@ -297,18 +311,13 @@ app.post("/:id/runs/:runId/merge", async (c) => {
 
 // Pull run
 app.post("/:id/runs/:runId/pull", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
   const body = await c.req.json().catch(() => ({}));
   const { strategy } = body;
-
-  let branch = runId;
-  if (!isNaN(Number(runId))) {
-    branch = getRunBranchName(id, Number(runId));
-  }
+  if (!runId) return c.json({ error: "Invalid IDs" }, 400);
 
   try {
-    await Runs.pullRun(id, branch, strategy);
+    await Runs.pullRun(runId, strategy);
     return c.json({ message: "Pull successful" });
   } catch (e) {
     const error = e as Error;
@@ -318,16 +327,11 @@ app.post("/:id/runs/:runId/pull", async (c) => {
 
 // Get run port
 app.get("/:id/runs/:runId/port", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
-  
-  let branch = runId;
-  if (!isNaN(Number(runId))) {
-    branch = getRunBranchName(id, Number(runId));
-  }
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
+  if (!runId) return c.json({ error: "Invalid IDs" }, 400);
 
   try {
-    const port = await Runs.getHostPort(branch, 4096);
+    const port = await Runs.getHostPort(runId, 4096);
     return c.json({ port });
   } catch (e) {
     const error = e as Error;
@@ -337,18 +341,12 @@ app.get("/:id/runs/:runId/port", async (c) => {
 
 // Delete run
 app.delete("/:id/runs/:runId", async (c) => {
-  const id = c.req.param("id");
-  const runId = c.req.param("runId");
+  const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
   const force = c.req.query("force") === "true";
-
-  let runIndex = Number(runId);
-  if (isNaN(runIndex)) {
-    const parsed = Runs.parseRunId(runId);
-    runIndex = parsed.runIndex;
-  }
+  if (!runId) return c.json({ error: "Invalid IDs" }, 400);
 
   try {
-    await Runs.removeRun(id, runIndex, force);
+    await Runs.removeRun(runId, force);
     return c.json({ message: "Run removed" });
   } catch (e) {
     const error = e as Error;
@@ -360,13 +358,8 @@ app.delete("/:id/runs/:runId", async (c) => {
 app.get(
   "/:id/runs/:runId/logs",
   createLogStreamHandler(async (c) => {
-      const id = c.req.param("id");
-      const runId = c.req.param("runId");
-      let branch = runId;
-      if (!isNaN(Number(runId))) {
-        branch = getRunBranchName(id, Number(runId));
-      }
-      return branch;
+      const { runId } = parseRouteIds(c.req.param("id"), c.req.param("runId"));
+      return runId || null;
   })
 );
 
@@ -377,11 +370,12 @@ app.get(
     let intervalId: number;
     return {
       onOpen: async (_evt, ws) => {
-        const id = c.req.param("id");
+        const taskId = TaskId.from(c.req.param("id"));
+        if (!taskId) { ws.close(); return; }
 
         // Send initial state
         try {
-          const runs = await Runs.listRuns(id);
+          const runs = await Runs.listRuns(taskId);
           ws.send(JSON.stringify({ type: "runs_update", data: runs }));
         } catch (e) {
           // ignore
@@ -389,7 +383,7 @@ app.get(
 
         intervalId = setInterval(async () => {
           try {
-            const runs = await Runs.listRuns(id);
+            const runs = await Runs.listRuns(taskId);
             ws.send(JSON.stringify({ type: "runs_update", data: runs }));
           } catch (e) {
              // ignore

@@ -21,13 +21,13 @@ export interface PrepareOptions {
  */
 export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Promise<void> {
   // 1. Resolve Base Branch
-  const baseBranch = await Git.resolveBaseBranch(ctx.taskId);
+  const baseBranch = await Git.resolveBaseBranch(ctx.runId.task);
 
   // Verify task file exists in base branch
   const taskFileRelative = join(
     HYPERBRANCH_DIR,
     TASKS_DIR_NAME,
-    `task-${ctx.taskId}.md`,
+    `task-${ctx.runId.task.id}.md`,
   );
   
   if (!(await Git.checkFileExistsInBranch(baseBranch, taskFileRelative))) {
@@ -58,7 +58,7 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
   const gitEmail = await Git.getConfig("user.email") || "";
   
   const env: Record<string, string> = {
-    HYPERBRANCH_TASK_ID: ctx.taskId,
+    HYPERBRANCH_TASK_ID: ctx.runId.task.id,
     HYPERBRANCH_TASK_FILE: taskFileRelative,
     HYPERBRANCH_AGENT_MODE: "build",
     HYPERBRANCH_PROMPT: options.prompt || "",

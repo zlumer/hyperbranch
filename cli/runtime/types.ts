@@ -1,3 +1,5 @@
+import { RunId } from "../utils/id.ts"
+
 export type RunState =
   | "unknown"    // No trace of the run found
   | "initial"    // User wants to create it (conceptual state, not derived from disk)
@@ -12,8 +14,7 @@ export type RunState =
   | "finished";  // Cleanup done, summary exists
 
 export interface RunContext {
-  taskId: string;
-  runIndex: number;
+  runId: RunId;
   branchName: string;
   clonePath: string;
   dockerProjectName: string;

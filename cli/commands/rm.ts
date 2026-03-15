@@ -2,8 +2,7 @@ import { Args } from "@std/cli/parse-args";
 import * as Tasks from "../services/tasks.ts";
 import * as Runs from "../services/runs.ts";
 import * as Cleanup from "../services/cleanup.ts";
-
-import { stripHbPrefix } from "../utils/branch-naming.ts";
+import { TaskId, RunId, parseTaskOrRunId, stripHbPrefix } from "../utils/id.ts";
 
 export async function rmCommand(args: Args) {
   const rawTargets = args._.slice(1).map(String);
@@ -27,18 +26,20 @@ export async function rmCommand(args: Args) {
 
   for (const target of targets) {
     try {
-      const runMatch = target.match(/^([a-zA-Z0-9-]+)\/(\d+)$/);
-      if (runMatch) {
-        const taskId = runMatch[1];
-        const runIndex = parseInt(runMatch[2], 10);
-        await Runs.removeRun(taskId, runIndex, force);
-        continue;
-      }
-
-      const taskMatch = target.match(/^([a-zA-Z0-9-]+)$/);
-      if (taskMatch) {
-        await Tasks.remove(taskMatch[1], force);
-        continue;
+      const parsed = parseTaskOrRunId(target);
+      if (parsed) {
+        if (parsed.hasRunIndex && parsed.runIndex !== undefined) {
+          const runId = RunId.from(parsed);
+          if (runId) {
+            await Runs.removeRun(runId, force);
+            continue;
+          }
+        }
+        const taskId = TaskId.from(parsed.taskId);
+        if (taskId) {
+          await Tasks.remove(taskId, force);
+          continue;
+        }
       }
 
       console.error(`Invalid target format: ${target}`);

@@ -1,7 +1,7 @@
 import { assertEquals } from "@std/assert"
 import { stub } from "@std/testing/mock"
 import * as Git from "./git.ts"
-import { getRunBranchName, getRunBranchPrefix } from "./branch-naming.ts"
+import { TaskId } from "./id.ts"
 
 // Mock Deno.Command to avoid actual git execution
 function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, success: boolean }>) {
@@ -54,7 +54,8 @@ function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, suc
 
 // Ensure mock git is disabled for these tests as they use their own stub
 Deno.test("getNextRunBranch - increments index", async () => {
-	const prefix = getRunBranchPrefix("123");
+	const task = new TaskId("123");
+	const prefix = task.runBranchPrefix();
 	const commandStub = mockGit({
 		[`branch --list ${prefix}*`]: { 
 			success: true, 
@@ -62,21 +63,22 @@ Deno.test("getNextRunBranch - increments index", async () => {
 		}
 	});
 	try {
-		const branch = await Git.getNextRunBranch("123");
-		assertEquals(branch, getRunBranchName("123", 3));
+		const branch = await Git.getNextRunBranch(task);
+		assertEquals(branch.toBranchName(), task.toRunId(3).toBranchName());
 	} finally {
 		commandStub.restore();
 	}
 });
 
 Deno.test("getNextRunBranch - starts at 1", async () => {
-	const prefix = getRunBranchPrefix("456");
+	const task = new TaskId("456");
+	const prefix = task.runBranchPrefix();
 	const commandStub = mockGit({
 		[`branch --list ${prefix}*`]: { success: true, stdout: "" }
 	});
 	try {
-		const branch = await Git.getNextRunBranch("456");
-		assertEquals(branch, getRunBranchName("456", 1));
+		const branch = await Git.getNextRunBranch(task);
+		assertEquals(branch.toBranchName(), task.toRunId(1).toBranchName());
 	} finally {
 		commandStub.restore();
 	}

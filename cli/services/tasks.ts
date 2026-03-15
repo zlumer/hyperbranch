@@ -1,10 +1,10 @@
 import { TaskFile, TaskFrontmatter, TaskStatus } from "../types.ts"
 import { generateTaskId, getTaskPath, scanTasks } from "../utils/tasks.ts"
 import { checkTaskExists, loadTask, saveTask } from "../utils/loadTask.ts"
-import { add, commit } from "../utils/git.ts"
 import * as Git from "../utils/git.ts"
 import * as Docker from "../utils/docker.ts"
 import * as Runs from "./runs.ts"
+import { TaskId } from "../utils/id.ts";
 
 /**
  * Create a new task.
@@ -61,39 +61,39 @@ export async function list(): Promise<TaskFile[]> {
 /**
  * Get a specific task by ID.
  */
-export async function get(id: string): Promise<TaskFile> {
-  return await loadTask(id)
+export async function get(taskId: TaskId): Promise<TaskFile> {
+  return await loadTask(taskId.id)
 }
 
 /**
  * Update a task.
  * Modifies frontmatter/content and saves the file.
  */
-export async function update(id: string, updates: Partial<TaskFile['frontmatter']> & { body?: string }): Promise<void> {
-  const task = await loadTask(id)
+export async function update(task: TaskId, updates: Partial<TaskFile['frontmatter']> & { body?: string }): Promise<void> {
+  const taskFile = await loadTask(task.id)
   
   const { body, ...frontmatterUpdates } = updates
 
   if (body !== undefined) {
-    task.body = body
+    taskFile.body = body
   }
 
-  Object.assign(task.frontmatter, frontmatterUpdates)
+  Object.assign(taskFile.frontmatter, frontmatterUpdates)
 
-  await saveTask(task)
+  await saveTask(taskFile)
 }
 
 /**
  * Delete a task file and associated resources.
  */
-export async function remove(id: string, force = false): Promise<void> {
-  console.log(`Analyzing task ${id}...`);
+export async function remove(task: TaskId, force = false): Promise<void> {
+  console.log(`Analyzing task ${task}...`);
   
-  const taskExists = await checkTaskExists(id);
-  const runs = await Runs.listRuns(id);
+  const taskExists = await checkTaskExists(task.id);
+  const runs = await Runs.listRuns(task);
 
   if (!taskExists && runs.length === 0) {
-    console.log(`Task ${id} not found.`);
+    console.log(`Task ${task} not found.`);
     return;
   }
 
@@ -104,7 +104,7 @@ export async function remove(id: string, force = false): Promise<void> {
            errors.push(`Run ${run.runId} is active.`);
        }
        // Check unmerged
-       const baseBranch = await Git.resolveBaseBranch(id);
+       const baseBranch = await Git.resolveBaseBranch(task);
        const unmerged = await Git.getUnmergedCommits(run.branchName, baseBranch);
        if (unmerged.trim().length > 0) {
            errors.push(`Run ${run.runId} has unmerged commits.`);
@@ -119,22 +119,22 @@ export async function remove(id: string, force = false): Promise<void> {
     }
   }
 
-  console.log(`Removing task ${id} and ${runs.length} runs...`);
+  console.log(`Removing task ${task} and ${runs.length} runs...`);
   
   for (const run of runs) {
-      await Runs.destroyRun(run.branchName); 
+      await Runs.destroyRun(run.runId); 
   }
 
   if (taskExists) {
-      const path = getTaskPath(id);
+      const path = getTaskPath(task.id);
       await Deno.remove(path);
-      console.log(`Removed task: ${id}`);
+      console.log(`Removed task: ${task}`);
   }
 
-  const imageTag = `hyperbranch-run:${id}`;
+  const imageTag = `hyperbranch-run:${task.id}`;
   try {
     await Docker.removeImage(imageTag, force);
   } catch {}
   
-  console.log(`✅ Task ${id} removed.`);
+  console.log(`✅ Task ${task} removed.`);
 }

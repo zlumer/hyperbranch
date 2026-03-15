@@ -5,7 +5,7 @@ import * as GitClones from "../utils/git-clones.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Runs from "./runs.ts";
 import { RUNS_DIR } from "../utils/paths.ts";
-import { getRunBranchName } from "../utils/branch-naming.ts";
+import { TaskId, RunId } from "../utils/id.ts";
 
 export async function sweep() {
   const runsDir = RUNS_DIR();
@@ -23,9 +23,9 @@ export async function sweep() {
     const match = entry.name.match(/^(hb|task)-(.+)-(\d+)$/);
     if (!match) continue;
 
-    const taskId = match[1];
+    const taskId = new TaskId(match[1]);
     const runIndex = parseInt(match[2], 10);
-    const runId = getRunBranchName(taskId, runIndex);
+    const runId = taskId.toRunId(runIndex);
 
     // Check Active
     const status = await Runs.getStatus(runId);
@@ -43,7 +43,7 @@ export async function sweep() {
     }
 
     // Check Merged
-    const runBranch = runId;
+    const runBranch = runId.toBranchName();
     if (await Git.branchExists(runBranch)) {
        const baseBranch = await Git.resolveBaseBranch(taskId);
        const isMerged = await Git.isBranchMerged(runBranch, baseBranch);
@@ -142,7 +142,7 @@ export async function listCandidates() {
   }
 }
 
-type Candidate = { taskId: string, runIndex: number }
+type Candidate = { taskId: string, runIndex: number, runId: RunId }
 type DirStatus = { type: "invalid_name" }
   | { type: "active" } & Candidate
   | { type: "dirty" } & Candidate
@@ -154,32 +154,32 @@ async function checkDir(dir: string, runsDir: string): Promise<DirStatus> {
   if (!match)
     return { type: "invalid_name" }
 
-  const taskId = match[1];
+  const taskId = new TaskId(match[1]);
   const runIndex = parseInt(match[2], 10);
-  const runId = getRunBranchName(taskId, runIndex);
+  const runId = taskId.toRunId(runIndex);
 
   // Check Active
   const status = await Runs.getStatus(runId);
   if (status.toLowerCase() === "running")
-    return { type: "active", taskId, runIndex }
+    return { type: "active", taskId: taskId.id, runIndex, runId }
 
   // Check Dirty
   const clonePath = join(runsDir, dir);
   const isDirty = await GitClones.status(clonePath);
   if (isDirty)
-    return { type: "dirty", taskId, runIndex }
+    return { type: "dirty", taskId: taskId.id, runIndex, runId }
 
   // Check Merged
-  if (!await isMerged(runId, taskId))
-    return { type: "not_merged", taskId, runIndex }
+  if (!await isMerged(runId))
+    return { type: "not_merged", taskId: taskId.id, runIndex, runId }
 
-  return { type: "ready", taskId, runIndex }
+  return { type: "ready", taskId: taskId.id, runIndex, runId }
 }
 
-async function isMerged(runBranch: string, taskId: string) {
-  if (!(await Git.branchExists(runBranch)))
+async function isMerged(runId: RunId) {
+  if (!(await Git.branchExists(runId.toBranchName())))
     return false
 
-  const baseBranch = await Git.resolveBaseBranch(taskId);
-  return Git.isBranchMerged(runBranch, baseBranch);
+  const baseBranch = await Git.resolveBaseBranch(runId.task);
+  return Git.isBranchMerged(runId.toBranchName(), baseBranch);
 }

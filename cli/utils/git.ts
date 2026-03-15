@@ -1,10 +1,5 @@
+import { RunId, TaskId } from "./id.ts";
 import { loadTask } from "./loadTask.ts";
-import {
-  getRunBranchName,
-  getRunBranchPrefix,
-  getTaskBranchName,
-  parseRunNumber,
-} from "./branch-naming.ts";
 import { getTaskPath } from "./tasks.ts";
 
 // Helper to run git command
@@ -83,13 +78,13 @@ export async function isBranchMerged(
   }
 }
 
-export async function resolveBaseBranch(taskId: string): Promise<string> {
+export async function resolveBaseBranch(taskId: TaskId): Promise<string> {
   try {
-    const task = await loadTask(taskId);
+    const task = await loadTask(taskId.id);
     if (task.frontmatter.parent) {
-      const parentBranch = getTaskBranchName(task.frontmatter.parent);
+      const parentBranch = TaskId.from(task.frontmatter.parent)?.toBranchName()
       // Check if branch exists
-      if (await branchExists(parentBranch)) {
+      if (parentBranch && await branchExists(parentBranch)) {
         return parentBranch;
       }
     }
@@ -114,8 +109,8 @@ export async function resolveBaseBranch(taskId: string): Promise<string> {
   return "master";
 }
 
-export async function getNextRunBranch(taskId: string): Promise<string> {
-  const prefix = getRunBranchPrefix(taskId);
+export async function getNextRunBranch(task: TaskId): Promise<RunId> {
+  const prefix = task.runBranchPrefix()
   try {
     const output = await git(["branch", "--list", `${prefix}*`]);
     const branches = output.split("\n").map((b) =>
@@ -124,23 +119,23 @@ export async function getNextRunBranch(taskId: string): Promise<string> {
 
     let maxIdx = 0;
     for (const branch of branches) {
-      const idx = parseRunNumber(branch);
-      if (idx !== null && idx > maxIdx) {
-        maxIdx = idx;
-      }
+      const runId = RunId.fromString(branch)
+      if (!runId || runId.task.id !== task.id)
+        continue
+
+      maxIdx = Math.max(maxIdx, runId.idx);
     }
-    return getRunBranchName(taskId, maxIdx + 1);
+    return task.toRunId(maxIdx + 1);
   } catch {
-    return getRunBranchName(taskId, 1);
+    return task.toRunId(1);
   }
 }
 
 export async function getLatestRunBranch(
-  taskId: string,
-): Promise<string | null> {
-  const prefix = getRunBranchPrefix(taskId);
+  taskId: TaskId,
+): Promise<RunId | null> {
   try {
-    const output = await git(["branch", "--list", `${prefix}*`]);
+    const output = await git(["branch", "--list", `${taskId.runBranchPrefix()}*`]);
     const branches = output.split("\n").map((b) =>
       b.trim().replace(/^[\*\+]\s+/, "")
     ).filter(Boolean);
@@ -148,31 +143,38 @@ export async function getLatestRunBranch(
     if (branches.length === 0) return null;
 
     let maxIdx = -1;
-    let latestBranch = "";
+    let latestRun: RunId | null = null;
 
     for (const branch of branches) {
-      const idx = parseRunNumber(branch);
-      if (idx !== null && idx > maxIdx) {
-        maxIdx = idx;
-        latestBranch = branch;
+      const runId = RunId.fromString(branch)
+      if (!runId)
+        continue
+      console.assert(runId.task.id == taskId.id, "Branch does not match task ID prefix. This should not happen.")
+      // const idx = parseRunNumber(branch);
+      if (runId.idx > maxIdx) {
+        maxIdx = runId.idx;
+        latestRun = runId;
       }
     }
-    return latestBranch || null;
+    return latestRun || null;
   } catch {
     return null;
   }
 }
 
-export async function listTaskRunBranches(taskId: string): Promise<string[]> {
-  const prefix = getRunBranchPrefix(taskId);
+export async function listTaskRunBranches(taskId: TaskId): Promise<string[]> {
+  const prefix = taskId.runBranchPrefix()
   try {
     const output = await git(["branch", "--list", `${prefix}*`]);
     const branches = output.split("\n").map((b) =>
       b.trim().replace(/^[\*\+]\s+/, "")
     ).filter(Boolean);
     return branches.sort((a, b) => {
-      const idxA = parseRunNumber(a) || 0;
-      const idxB = parseRunNumber(b) || 0;
+      const idxA = RunId.fromString(a)?.idx || 0;
+      const idxB = RunId.fromString(b)?.idx || 0;
+      if (idxA == idxB) {
+        return a.localeCompare(b); // Fallback to alphabetical if runIdx is the same or cannot be parsed
+      }
       return idxB - idxA; // Descending order
     });
   } catch {
