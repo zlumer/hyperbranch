@@ -1,20 +1,20 @@
 import { parseArgs } from "@std/cli/parse-args"
 import * as Tasks from "../services/tasks.ts"
 import { TaskStatus } from "../types.ts"
-import { stripHbPrefix } from "../utils/branch-naming.ts"
+import { TaskId } from "../utils/id.ts";
 
 export async function moveCommand(args: ReturnType<typeof parseArgs>)
 {
-	const taskId = stripHbPrefix(args._[1] as string)
-	const target = stripHbPrefix(args._[2] as string)
+	const taskId = TaskId.from(args._[1] as string)
+	const target = args._[2] as string
 	const fromStatus = args["from-status"] as string | undefined
 
 	const VALID_STATUSES = ["todo", "plan", "build", "review", "done", "cancelled"]
 
 	if (!taskId || !target)
 	{
-		console.error("Error: Task ID and Target (Status or New Parent ID) are required.")
-		console.error(`Usage: hb move [--from-status <old-status>] <task-id> <status|parent-id>`)
+		console.error("Error: Task ID and Target Status are required.")
+		console.error(`Usage: hb move [--from-status <old-status>] <task-id> <status>`)
 		console.error(`Valid statuses: ${VALID_STATUSES.join("|")}`)
 		Deno.exit(1)
 	}
@@ -48,30 +48,8 @@ export async function moveCommand(args: ReturnType<typeof parseArgs>)
 		}
 		else
 		{
-			// Reparenting
-			let newParentId: string | null = target
-			if (target === "root" || target === "none") {
-				newParentId = null
-			} else {
-				// Verify parent exists
-				try {
-					await Tasks.get(newParentId)
-				} catch {
-					console.error(`Error: Invalid status or parent task not found: '${target}'`)
-					Deno.exit(1)
-				}
-			}
-
-			if (task.frontmatter.parent !== newParentId)
-			{
-				const old = task.frontmatter.parent
-				await Tasks.update(taskId, { parent: newParentId })
-				console.log(`Task ${taskId} reparented: ${old || "root"} -> ${newParentId || "root"}`)
-			}
-			else
-			{
-				console.log(`Task ${taskId} is already under parent ${newParentId || "root"}`)
-			}
+			console.error(`Error: Invalid target status '${target}'. Valid statuses are: ${VALID_STATUSES.join(", ")}`)
+			Deno.exit(1)
 		}
 	} catch (e) {
 		console.error(`Error: ${e instanceof Error ? e.message : String(e)}`)

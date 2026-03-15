@@ -136,6 +136,10 @@ export class RunId
 	{
 		return RunId.from(parseTaskOrRunId(idStr))
 	}
+	static fromTaskIdAndRunIdx(taskIdStr: string | undefined, runIdx: number | string | undefined): RunId | undefined
+	{
+		return RunId.from(parseTaskOrRunId(taskIdStr, runIdx))
+	}
 	static from(ids: ReturnType<typeof parseTaskOrRunId>): RunId | undefined
 	{
 		if (!ids?.hasRunIndex || ids.runIndex === undefined)

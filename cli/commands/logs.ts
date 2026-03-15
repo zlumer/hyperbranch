@@ -1,75 +1,67 @@
 import { Args } from "@std/cli/parse-args";
 import * as Git from "../utils/git.ts";
 import * as Runs from "../services/runs.ts";
-import { getRunBranchName, splitRunBranchName, stripHbPrefix } from "../utils/branch-naming.ts";
+import { RunId, TaskId } from "../utils/id.ts";
 
-export async function logsCommand(args: Args) {
-  const taskIdOrRunId = args._[1] as string;
-  const runArg = args._[2];
+export async function logsCommand(args: Args)
+{
+	const task = TaskId.from(args._[1] as string);
+	let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
 
-  if (!taskIdOrRunId) {
-    console.error("Error: Task ID is required.");
-    console.error("Usage: hb logs <task-id> <run-index>");
-    Deno.exit(1);
-  }
+	if (!task)
+	{
+		console.error("Error: Task ID and Run Index are required.");
+		console.error("Usage: hb logs <task-id>/<run-index>");
+		Deno.exit(1);
+	}
 
-  let runId: string;
+	if (!run)
+	{
+		console.log(`No run index provided. Fetching latest run for task '${task}'...`);
+		run = await Git.getLatestRunBranch(task)
+		if (!run)
+		{
+			console.error(`No runs found for task '${task}'`);
+			Deno.exit(1);
+		}
+		console.log(`Latest run found: ${run}`);
+	}
 
-  // Check if the first argument is already a full run ID (e.g. hb/task/1)
-  const runInfo = splitRunBranchName(taskIdOrRunId);
+	const follow = args.f || args.follow;
 
-  if (runInfo) {
-    runId = taskIdOrRunId;
-  } else {
-    // Treat as task ID
-    const taskId = stripHbPrefix(taskIdOrRunId);
-    if (runArg) {
-      const runIndex = parseInt(String(runArg), 10);
-      if (isNaN(runIndex)) {
-        console.error(`Invalid run index: ${runArg}`);
-        Deno.exit(1);
-      }
-      runId = getRunBranchName(taskId, runIndex);
-    } else {
-      // Determine latest run
-      const latest = await Git.getLatestRunBranch(taskId);
-      if (!latest) {
-          console.error(`No runs found for task '${taskId}'`);
-          Deno.exit(1);
-      }
-      runId = latest;
-    }
-  }
+	try
+	{
+		console.log(`Streaming logs for run ${run} ${follow ? "(follow)" : ""}...`);
 
-  const follow = args.f || args.follow;
-  
-  try {
-      console.log(`Streaming logs for run ${runId} ${follow ? "(follow)" : ""}...`);
-      
-      const process = await Runs.getLogsStream(runId, follow);
-      
-      // Handle signals to exit cleanly
-      Deno.addSignalListener("SIGINT", () => {
-          try {
-             process.kill();
-          } catch {
-             // ignore if already dead
-          }
-          Deno.exit(0);
-      });
+		const process = await Runs.getLogsStream(run, follow);
 
-      const status = await process.status;
-      
-      if (!status.success) {
-          // Docker logs might fail if the container is already removed
-          // But usually it exits with 0 if stream ends.
-          // If it exits with non-zero, it means error (e.g. No such container)
-          console.error("Log stream exited with non-zero status.");
-          Deno.exit(status.code);
-      }
+		// Handle signals to exit cleanly
+		Deno.addSignalListener("SIGINT", () =>
+		{
+			try
+			{
+				process.kill();
+			} catch
+			{
+				// ignore if already dead
+			}
+			Deno.exit(0);
+		});
 
-  } catch (e) {
-      console.error(e instanceof Error ? e.message : String(e));
-      Deno.exit(1);
-  }
+		const status = await process.status;
+
+		if (!status.success)
+		{
+			// Docker logs might fail if the container is already removed
+			// But usually it exits with 0 if stream ends.
+			// If it exits with non-zero, it means error (e.g. No such container)
+			console.error("Log stream exited with non-zero status.");
+			Deno.exit(status.code);
+		}
+
+	} catch (e)
+	{
+		console.error(e instanceof Error ? e.message : String(e));
+		Deno.exit(1);
+	}
 }

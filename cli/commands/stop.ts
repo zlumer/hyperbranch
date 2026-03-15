@@ -1,33 +1,21 @@
 import { Args } from "@std/cli/parse-args";
 import * as Runs from "../services/runs.ts";
-import * as Git from "../utils/git.ts";
-import { getRunBranchName, stripHbPrefix } from "../utils/branch-naming.ts";
+import { parseTaskOrRunId, RunId } from "../utils/id.ts";
 
 export async function stopCommand(args: Args) {
-  const taskId = stripHbPrefix(args._[1] as string);
-  const runArg = args._[2];
+  const params = parseTaskOrRunId(args._[1] as string, args._[2])
 
-  if (!taskId) {
-    console.error("Error: Task ID is required.");
+  if (!params) {
+    console.error("Error: Missing or invalid Task ID: " + args._[1]);
     console.error("Usage: hb stop <task-id> [run-index]");
     Deno.exit(1);
   }
 
-  let runId: string;
-  if (runArg) {
-    const runIndex = parseInt(String(runArg), 10);
-    if (isNaN(runIndex)) {
-      console.error(`Invalid run index: ${runArg}`);
-      Deno.exit(1);
-    }
-    runId = getRunBranchName(taskId, runIndex);
-  } else {
-    const latest = await Runs.getLatestRunId(taskId);
-    if (!latest) {
-      console.error(`No runs found for task '${taskId}'`);
-      Deno.exit(1);
-    }
-    runId = latest;
+  const runId = RunId.from(params)
+  if (!runId) {
+	console.error("Error: Invalid Run Index. " + args._[2]);
+	console.error("Usage: hb stop <task-id> [run-index]");
+	Deno.exit(1);
   }
 
   try {

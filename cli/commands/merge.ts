@@ -1,29 +1,22 @@
 import * as Runs from "../services/runs.ts";
-import { stripHbPrefix, getRunBranchName } from "../utils/branch-naming.ts";
+import { RunId } from "../utils/id.ts";
+import { z } from "zod"
 
 export async function mergeCommand(args: any) {
-  const taskId = stripHbPrefix(args._[1] as string);
-  const runIndexStr = args._[2] as string;
+  const runId = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
 
-  if (!taskId || !runIndexStr) {
+  if (!runId) {
     console.error("Error: Task ID and Run Index are required.");
-    console.error("Usage: hb merge <task-id> <run-index> [--strategy <merge|squash|ff>] [--cleanup]");
+    console.error("Usage: hb merge <task-id>/<run-index> [--strategy <merge|squash|ff>] [--cleanup]");
     Deno.exit(1);
   }
 
-  const runIndex = parseInt(runIndexStr, 10);
-  if (isNaN(runIndex)) {
-    console.error(`Error: Invalid run index '${runIndexStr}'`);
-    Deno.exit(1);
-  }
-
-  const runId = getRunBranchName(taskId, runIndex);
   const strategy = (args.strategy as "merge" | "squash" | "ff") || "ff";
-  const cleanup = args.cleanup || false;
+  const cleanup = z.stringbool().safeParse(args.cleanup).data || false;
 
   try {
     console.log(`Merging run ${runId} using strategy '${strategy}'...`);
-    const { cleanupSkipped } = await Runs.mergeRun(taskId, runId, strategy, cleanup);
+    const { cleanupSkipped } = await Runs.mergeRun(runId, strategy, cleanup);
     console.log("✅ Merge successful.");
     if (cleanupSkipped) {
       console.log("⚠️ Cleanup skipped: Run has uncommitted changes.");
