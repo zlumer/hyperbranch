@@ -147,26 +147,11 @@ app.post("/:id/run", async (c) => {
   return c.json(result);
 });
 
-// Stop task
-app.post("/:id/stop", async (c) => {
-  const idStr = c.req.param("id");
-  const parsed = parseTaskOrRunId(idStr);
-  
-  if (!parsed) {
-    return c.json({ error: "Invalid ID format" }, 400);
-  }
-
-  let runIdToStop: RunId | undefined;
-
-  if (parsed.hasRunIndex && parsed.runIndex !== undefined) {
-    runIdToStop = RunId.from(parsed);
-  } else {
-    const taskId = new TaskId(parsed.taskId);
-    runIdToStop = await Runs.getLatestRunId(taskId) || undefined;
-  }
-  
+// Stop run
+app.post("/:id/runs/:runId/stop", async (c) => {
+  const runIdToStop = RunId.fromTaskIdAndRunIdx(c.req.param("id"), c.req.param("runId"))
   if (!runIdToStop) {
-    return c.json({ error: "No active runs found to stop for task" }, 404);
+    return c.json({ error: "Run not found", message: `task ${c.req.param("id")} run ${c.req.param("runId")}` }, 400);
   }
 
   try {
