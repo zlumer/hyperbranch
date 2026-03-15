@@ -46,7 +46,7 @@ export function stripHbPrefix(id: string): string
 
 export class TaskId
 {
-	public readonly taskId: string;
+	public readonly id: string;
 
 	constructor(taskId: string)
 	{
@@ -57,7 +57,7 @@ export class TaskId
 		if (!parsed)
 			throw new Error(`Unable to parse task ID: "${taskId}"`)
 
-		this.taskId = taskId;
+		this.id = taskId;
 	}
 
 	static from(idStr: string | undefined): TaskId | undefined
@@ -84,7 +84,7 @@ export class TaskId
 	 */
 	toBranchName(): string
 	{
-		return `${HB_PREFIX}/${this.taskId}`
+		return `${HB_PREFIX}/${this.id}`
 	}
 
 	/**
@@ -108,24 +108,28 @@ export class TaskId
 	 */
 	toDirectorySlug(): string
 	{
-		return `${HB_PREFIX}-${this.taskId}`
+		return `${HB_PREFIX}-${this.id}`
 	}
 
 	toRunId(runIdx: number): RunId
 	{
 		return new RunId(this, runIdx)
 	}
+	toString(): string
+	{
+		return this.id
+	}
 }
 
 export class RunId
 {
 	public readonly task: TaskId
-	public readonly runIdx: number;
+	public readonly idx: number;
 
 	constructor(task: TaskId, runIdx: number)
 	{
 		this.task = task;
-		this.runIdx = runIdx;
+		this.idx = runIdx;
 	}
 
 	static fromString(idStr: string | undefined): RunId | undefined
@@ -148,7 +152,7 @@ export class RunId
 	 */
 	toBranchName(): string
 	{
-		return `${this.task.toBranchName()}/${this.runIdx}`
+		return `${this.task.toBranchName()}/${this.idx}`
 	}
 
 	/**
@@ -159,6 +163,10 @@ export class RunId
 	 */
 	toDirectorySlug(): string
 	{
-		return `${this.task.toDirectorySlug()}-${this.runIdx}`
+		return `${this.task.toDirectorySlug()}-${this.idx}`
+	}
+	toString(): string
+	{
+		return `${this.task.id}/${this.idx}`
 	}
 }
