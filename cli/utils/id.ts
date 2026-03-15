@@ -119,6 +119,10 @@ export class TaskId
 	{
 		return this.id
 	}
+	toJSON(): string
+	{
+		return this.id
+	}
 }
 
 export class RunId
@@ -170,6 +174,10 @@ export class RunId
 		return `${this.task.toDirectorySlug()}-${this.idx}`
 	}
 	toString(): string
+	{
+		return `${this.task.id}/${this.idx}`
+	}
+	toJSON(): string
 	{
 		return `${this.task.id}/${this.idx}`
 	}
