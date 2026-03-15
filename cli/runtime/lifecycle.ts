@@ -1,4 +1,5 @@
 import { exists } from "@std/fs/exists";
+import { copy as copyDir } from "@std/fs/copy";
 import { join } from "@std/path";
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
@@ -81,6 +82,11 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
   const source = join(HYPERBRANCH_DIR, ".env.run")
   if (await exists(source))
     await Deno.copyFile(source, join(ctx.paths.runDir, ".env"))
+
+  // 6. Copy extra files if specified
+  const extraFiles = join(HYPERBRANCH_DIR, "add")
+  if (await exists(extraFiles))
+    await copyDir(extraFiles, ctx.paths.runDir, { overwrite: true })
 }
 
 /**
