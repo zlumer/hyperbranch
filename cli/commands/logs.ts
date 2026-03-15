@@ -2,12 +2,22 @@ import { Args } from "@std/cli/parse-args";
 import * as Git from "../utils/git.ts";
 import * as Runs from "../services/runs.ts";
 import { RunId, TaskId } from "../utils/id.ts";
+import { z } from "zod";
+
+const LogsArgsSchema = z.object({
+	_: z.array(z.union([z.string(), z.number()])),
+	f: z.boolean().optional(),
+	follow: z.boolean().optional(),
+});
 
 export async function logsCommand(args: Args)
 {
-	// AI! zod validate for args
-	const task = TaskId.from(args._[1] as string);
-	let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
+	const parsedArgs = LogsArgsSchema.parse(args);
+	const taskArg = parsedArgs._[1] ? String(parsedArgs._[1]) : undefined;
+	const runArg = parsedArgs._[2] ? String(parsedArgs._[2]) : undefined;
+
+	const task = taskArg ? TaskId.from(taskArg) : null;
+	let run: RunId | null | undefined = taskArg ? RunId.fromTaskIdAndRunIdx(taskArg, runArg) : null;
 
 	if (!task)
 	{
@@ -28,7 +38,7 @@ export async function logsCommand(args: Args)
 		console.log(`Latest run found: ${run}`);
 	}
 
-	const follow = args.f || args.follow;
+	const follow = parsedArgs.f || parsedArgs.follow;
 
 	try
 	{
