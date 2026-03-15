@@ -35,7 +35,7 @@ export async function psCommand() {
 
     for (const run of runs) {
       console.log(
-        run.runId.idx.toString().padEnd(25) +
+        run.runId.toString().padEnd(25) +
         task.frontmatter.status.padEnd(12) +
         run.status.padEnd(12) +
         title
