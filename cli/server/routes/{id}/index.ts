@@ -26,7 +26,7 @@ export const patch = os
     const taskId = TaskId.from(input.id)
     if (!taskId) throw new ORPCError("BAD_REQUEST", { message: "Invalid task ID" })
     const { id, ...data } = input
-    await Tasks.update(taskId, data as any)
+    await Tasks.update(taskId, data)
     return await Tasks.get(taskId)
   })
 
