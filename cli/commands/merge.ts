@@ -7,12 +7,12 @@ import { Args } from "@std/cli/parse-args";
 const MergeArgsSchema = z.object({
   _: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
   strategy: z.enum(["merge", "squash", "ff"]).optional().default("ff"),
-  cleanup: z.union([z.boolean(), z.stringbool()]).optional().default(false),
+  cleanup: z.union([z.boolean(), z.string().transform(v => v === "true")]).optional().default(false),
 })
 
 export async function mergeCommand(rawArgs: Args) {
   const args = parseZodArgs(MergeArgsSchema, rawArgs);
-  const runId = RunId.fromTaskIdAndRunIdx(args._[1], args._[2]);
+  const runId = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
 
   if (!runId) {
     console.error("Error: Task ID and Run Index are required.");
@@ -20,8 +20,8 @@ export async function mergeCommand(rawArgs: Args) {
     Deno.exit(1);
   }
 
-  const strategy = args.strategy;
-  const cleanup = args.cleanup
+  const strategy = args.strategy as "merge" | "squash" | "ff";
+  const cleanup = args.cleanup as boolean;
 
   try {
     console.log(`Merging run ${runId} using strategy '${strategy}'...`);
