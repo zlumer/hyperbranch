@@ -15,9 +15,16 @@ export async function logsCommand(args: Args)
 	const parsedArgs = LogsArgsSchema.parse(args);
 	const taskArg = parsedArgs._[1] ? String(parsedArgs._[1]) : undefined;
 	const runArg = parsedArgs._[2] ? String(parsedArgs._[2]) : undefined;
+	if (!taskArg)
+	{
+		console.error("Error: Task ID and Run Index are required.");
+		console.error("Usage: hb logs <task-id>/<run-index>");
+		Deno.exit(1);
+	}
 
-	const task = taskArg ? TaskId.from(taskArg) : null;
-	let run: RunId | null | undefined = taskArg ? RunId.fromTaskIdAndRunIdx(taskArg, runArg) : null;
+
+	const task = TaskId.from(taskArg)
+	let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(taskArg, runArg)
 
 	if (!task)
 	{
@@ -38,7 +45,7 @@ export async function logsCommand(args: Args)
 		console.log(`Latest run found: ${run}`);
 	}
 
-	const follow = parsedArgs.f || parsedArgs.follow;
+	const follow = parsedArgs.f ?? parsedArgs.follow ?? false
 
 	try
 	{
