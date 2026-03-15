@@ -1,13 +1,23 @@
-import { parseArgs } from "@std/cli/parse-args"
+import { Args } from "@std/cli/parse-args"
 import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts"
 import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts"
 import { TaskId } from "../utils/id.ts";
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
-export async function connectCommand(args: ReturnType<typeof parseArgs>)
+const ConnectArgsSchema = z.object({
+	_: z.array(z.union([z.string(), z.number()])),
+	"depends-on": z.string().optional(),
+	"child-of": z.string().optional(),
+})
+
+export async function connectCommand(rawArgs: Args)
 {
-	const taskId = TaskId.from(args._[1] as string)
-	const dependsOnRaw = args["depends-on"] as string | undefined
-	const childOfRaw = args["child-of"] as string | undefined
+	const args = parseZodArgs(ConnectArgsSchema, rawArgs);
+	const targetArg = args._[1] ? String(args._[1]) : undefined;
+	const taskId = targetArg ? TaskId.from(targetArg) : undefined;
+	const dependsOnRaw = args["depends-on"]
+	const childOfRaw = args["child-of"]
 
 	const dependsOn = dependsOnRaw ? TaskId.from(dependsOnRaw) : undefined
 	const childOf = childOfRaw ? TaskId.from(childOfRaw) : undefined

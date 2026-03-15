@@ -2,9 +2,22 @@ import { Args } from "@std/cli/parse-args";
 import * as Runs from "../services/runs.ts";
 import { parseArgsString } from "../utils/args.ts";
 import { TaskId } from "../utils/id.ts";
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
-export async function runCommand(args: Args) {
-  const taskId = TaskId.from(args._[1] as string);
+const RunArgsSchema = z.object({
+  _: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
+  image: z.string().optional(),
+  dockerfile: z.string().optional(),
+  commit: z.boolean().optional(),
+  exec: z.string().optional(),
+  "exec-file": z.string().optional(),
+})
+
+export async function runCommand(rawArgs: Args) {
+  const args = parseZodArgs(RunArgsSchema, rawArgs);
+  const taskId = TaskId.from(args._[1])
+  
   if (!taskId) {
     console.error("Error: Task ID is required.");
     console.error("Usage: hb run <task-id> [options]");
@@ -12,16 +25,16 @@ export async function runCommand(args: Args) {
   }
 
   const options: Runs.RunOptions & { commit?: boolean } = {
-    image: args["image"] as string,
-    dockerfile: args["dockerfile"] as string,
-    commit: args["commit"] as boolean,
+    image: args.image,
+    dockerfile: args.dockerfile,
+    commit: args.commit,
     // dockerArgs: (args["docker-args"] as string)?.split(" ").filter(Boolean), // Not supported in Compose mode easily
   };
 
-  if (args["exec"]) {
-    options.exec = parseArgsString(args["exec"] as string);
+  if (args.exec) {
+    options.exec = parseArgsString(args.exec);
   } else if (args["exec-file"]) {
-    const file = args["exec-file"] as string;
+    const file = args["exec-file"];
     options.exec = ["./" + file];
   }
 

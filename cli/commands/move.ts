@@ -1,13 +1,21 @@
-import { parseArgs } from "@std/cli/parse-args"
+import { Args } from "@std/cli/parse-args"
 import * as Tasks from "../services/tasks.ts"
 import { TaskStatus } from "../types.ts"
 import { TaskId } from "../utils/id.ts";
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
-export async function moveCommand(args: ReturnType<typeof parseArgs>)
+const MoveArgsSchema = z.object({
+	_: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
+	"from-status": z.string().optional(),
+})
+
+export async function moveCommand(rawArgs: Args)
 {
-	const taskId = TaskId.from(args._[1] as string)
-	const target = args._[2] as string
-	const fromStatus = args["from-status"] as string | undefined
+	const args = parseZodArgs(MoveArgsSchema, rawArgs);
+	const taskId = TaskId.from(args._[1])
+	const target = args._[2]
+	const fromStatus = args["from-status"]
 
 	const VALID_STATUSES = ["todo", "plan", "build", "review", "done", "cancelled"]
 

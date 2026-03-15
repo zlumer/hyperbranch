@@ -3,10 +3,19 @@ import * as Tasks from "../services/tasks.ts";
 import * as Runs from "../services/runs.ts";
 import * as Cleanup from "../services/cleanup.ts";
 import { TaskId, RunId, parseTaskOrRunId, stripHbPrefix } from "../utils/id.ts";
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
-export async function rmCommand(args: Args) {
-  const rawTargets = args._.slice(1).map(String);
-  const targets = rawTargets.map(stripHbPrefix);
+const RmArgsSchema = z.object({
+  _: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
+  sweep: z.boolean().optional(),
+  force: z.boolean().optional(),
+  f: z.boolean().optional(),
+})
+
+export async function rmCommand(rawArgs: Args) {
+  const args = parseZodArgs(RmArgsSchema, rawArgs);
+  const targets = args._.slice(1).map(stripHbPrefix);
   const force = args.force || args.f || false;
 
   if (args.sweep) {

@@ -1,9 +1,16 @@
 import { Args } from "@std/cli/parse-args";
 import * as Runs from "../services/runs.ts";
 import { parseTaskOrRunId, RunId } from "../utils/id.ts";
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
-export async function stopCommand(args: Args) {
-  const params = parseTaskOrRunId(args._[1] as string, args._[2])
+const StopArgsSchema = z.object({
+  _: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
+})
+
+export async function stopCommand(rawArgs: Args) {
+  const args = parseZodArgs(StopArgsSchema, rawArgs);
+  const params = parseTaskOrRunId(args._[1], args._[2])
 
   if (!params) {
     console.error("Error: Missing or invalid Task ID: " + args._[1]);

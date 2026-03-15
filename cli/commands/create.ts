@@ -1,11 +1,20 @@
-import { parseArgs } from "@std/cli/parse-args"
+import { Args } from "@std/cli/parse-args"
 import * as Tasks from "../services/tasks.ts"
+import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
+
+const CreateArgsSchema = z.object({
+	_: z.array(z.union([z.string(), z.number()])),
+	edit: z.boolean().optional(),
+	parent: z.string().optional(),
+})
 
 // --- Commands ---
-export async function createCommand(args: ReturnType<typeof parseArgs>)
+export async function createCommand(rawArgs: Args)
 {
+	const args = parseZodArgs(CreateArgsSchema, rawArgs);
 	const edit = args.edit || false
-	const parentId = args.parent as string | undefined
+	const parentId = args.parent
 
 	// Title is the rest of the arguments joined
 	// args._[0] is 'create', so slice 1

@@ -3,18 +3,19 @@ import * as Git from "../utils/git.ts";
 import * as Runs from "../services/runs.ts";
 import { RunId, TaskId } from "../utils/id.ts";
 import { z } from "zod";
+import { parseZodArgs } from "../utils/zod.ts";
 
 const LogsArgsSchema = z.object({
-	_: z.array(z.union([z.string(), z.number()])),
+	_: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
 	f: z.boolean().optional(),
 	follow: z.boolean().optional(),
-});
+})
 
 export async function logsCommand(args: Args)
 {
-	const parsedArgs = LogsArgsSchema.parse(args);
-	const taskArg = parsedArgs._[1] ? String(parsedArgs._[1]) : undefined;
-	const runArg = parsedArgs._[2] ? String(parsedArgs._[2]) : undefined;
+	const parsedArgs = parseZodArgs(LogsArgsSchema, args);
+	const taskArg = parsedArgs._[1]
+	const runArg = parsedArgs._[2]
 	if (!taskArg)
 	{
 		console.error("Error: Task ID and Run Index are required.");
