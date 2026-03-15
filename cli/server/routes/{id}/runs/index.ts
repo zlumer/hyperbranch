@@ -9,5 +9,12 @@ export const get = os
   .handler(async ({ input }) => {
     const taskId = TaskId.from(input.id)
     if (!taskId) throw new ORPCError("BAD_REQUEST", { message: "Invalid task ID" })
-    return await Runs.listRuns(taskId)
+    try {
+      return await Runs.listRuns(taskId)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw new ORPCError("NOT_FOUND", { message: error.message })
+      }
+      throw error
+    }
   })

@@ -78,7 +78,12 @@ export async function update(task: TaskId, updates: Partial<TaskFile['frontmatte
     taskFile.body = body
   }
 
-  Object.assign(taskFile.frontmatter, frontmatterUpdates)
+  for (const [key, value] of Object.entries(frontmatterUpdates)) {
+    if (value !== undefined) {
+      // @ts-ignore: dynamically updating frontmatter
+      taskFile.frontmatter[key as keyof TaskFrontmatter] = value
+    }
+  }
 
   await saveTask(taskFile)
 }

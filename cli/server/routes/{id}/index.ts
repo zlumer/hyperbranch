@@ -12,7 +12,14 @@ export const get = os
   .handler(async ({ input }) => {
     const taskId = TaskId.from(input.id)
     if (!taskId) throw new ORPCError("BAD_REQUEST", { message: "Invalid task ID" })
-    return await Tasks.get(taskId)
+    try {
+      return await Tasks.get(taskId)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw new ORPCError("NOT_FOUND", { message: error.message })
+      }
+      throw error
+    }
   })
 
 export const patch = os
@@ -26,8 +33,15 @@ export const patch = os
     const taskId = TaskId.from(input.id)
     if (!taskId) throw new ORPCError("BAD_REQUEST", { message: "Invalid task ID" })
     const { id, ...data } = input
-    await Tasks.update(taskId, data)
-    return await Tasks.get(taskId)
+    try {
+      await Tasks.update(taskId, data)
+      return await Tasks.get(taskId)
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw new ORPCError("NOT_FOUND", { message: error.message })
+      }
+      throw error
+    }
   })
 
 export const del = os
