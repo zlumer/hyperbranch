@@ -6,6 +6,7 @@ import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";
 import { getRunContext } from "../runtime/context.ts";
 import { RunId, TaskId } from "../utils/id.ts";
+import { RUNS_DIR } from "../utils/paths.ts";
 
 export interface RunOptions extends Lifecycle.PrepareOptions {}
 
@@ -107,21 +108,68 @@ export interface RunInfo {
   drift?: { ahead: number; behind: number };
 }
 
-export async function listRuns(task: TaskId): Promise<RunInfo[]> {
+async function findRunsByBranches(task: TaskId): Promise<RunId[]> {
   const branches = await Git.listTaskRunBranches(task);
-  const runs: RunInfo[] = [];
+  return branches.map((b) => RunId.fromString(b)).filter((r): r is RunId =>
+    !!r
+  );
+}
 
+async function findRunsByClones(task: TaskId): Promise<RunId[]> {
+  const runsDir = RUNS_DIR();
+  if (!(await exists(runsDir))) return [];
+  const runs: RunId[] = [];
+  const slugPrefix = task.toDirectorySlug() + "-";
+  for await (const entry of Deno.readDir(runsDir)) {
+    if (entry.isDirectory && entry.name.startsWith(slugPrefix)) {
+      const runId = RunId.fromString(entry.name);
+      if (runId && runId.task.id === task.id) {
+        runs.push(runId);
+      }
+    }
+  }
+  return runs;
+}
+
+async function findRunsByContainers(task: TaskId): Promise<RunId[]> {
+  const slugPrefix = task.toDirectorySlug() + "-";
+  const containerNames = await Docker.findContainersByPartialName(slugPrefix);
+  const runs = new Map<string, RunId>();
+
+  const regex = new RegExp(`^(${task.toDirectorySlug()}-\\d+)`);
+
+  for (const name of containerNames) {
+    const match = name.match(regex);
+    if (match) {
+      const slug = match[1];
+      const runId = RunId.fromString(slug);
+      if (runId && runId.task.id === task.id) {
+        runs.set(runId.toString(), runId);
+      }
+    }
+  }
+  return Array.from(runs.values());
+}
+
+export async function listRuns(task: TaskId): Promise<RunInfo[]> {
+  const [branchRuns, cloneRuns, containerRuns] = await Promise.all([
+    findRunsByBranches(task),
+    findRunsByClones(task),
+    findRunsByContainers(task),
+  ]);
+
+  const allRuns = new Map<string, RunId>();
+  for (const r of [...branchRuns, ...cloneRuns, ...containerRuns]) {
+    allRuns.set(r.toString(), r);
+  }
+
+  const runs: RunInfo[] = [];
   const baseBranch = await Git.resolveBaseBranch(task);
 
-  for (const branch of branches) {
-	const run = RunId.fromString(branch);
-	if (!run || run.task.id !== task.id) {
-	  console.warn(`Skipping branch '${branch}' which does not match expected run branch format for task ${task.id}`);
-	  continue;
-	}
+  for (const run of allRuns.values()) {
     const ctx = getRunContext(run);
     const status = await Lifecycle.getRunState(ctx);
-    
+
     let drift;
     if (await exists(ctx.clonePath)) {
       try {
@@ -136,13 +184,13 @@ export async function listRuns(task: TaskId): Promise<RunInfo[]> {
       runId: run,
       branchName: run.toBranchName(),
       status,
-      // logsPath is deprecated but kept for compatibility if needed, 
-      // but ideally consumers should use the logs API
-      logsPath: "", 
+      logsPath: "",
       drift,
     });
   }
-  return runs;
+
+  // Sort by index descending
+  return runs.sort((a, b) => b.runId.idx - a.runId.idx);
 }
 
 export async function getRunFiles(

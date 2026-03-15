@@ -209,8 +209,10 @@ export async function getRunState(ctx: RunContext): Promise<RunState> {
       "task",
       ctx.dockerProjectName
     );
-  } else {
-    // Fallback: try to find by predictable name if compose file is gone
+  }
+
+  // Fallback: try to find by predictable name if compose file is gone or service lookup failed
+  if (!containerId) {
     // Docker Compose V2 usually names: project-service-index
     const name = `${ctx.dockerProjectName}-task-1`;
     containerId = await Docker.getContainerIdByName(name);
@@ -221,7 +223,12 @@ export async function getRunState(ctx: RunContext): Promise<RunState> {
     return "unknown";
   }
 
-  // 3. Analyze Container Status
+  // 3. Handle Orphaned runs (artifacts exist but branch is gone)
+  if (!branchExists && (cloneExists || containerId)) {
+    return "orphaned";
+  }
+
+  // 4. Analyze Container Status
   if (containerId) {
     const { status, exitCode } = await Docker.getContainerStatus(containerId);
 
