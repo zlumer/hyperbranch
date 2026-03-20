@@ -86,7 +86,9 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
   // 6. Copy extra files if specified
   const extraFiles = join(HYPERBRANCH_DIR, "add")
   if (await exists(extraFiles))
-    await copyDir(extraFiles, ctx.paths.runDir, { overwrite: true })
+    await copyDir(extraFiles, ctx.clonePath, { overwrite: true })
+
+  console.log(`copied extra files from ${extraFiles} to ${ctx.clonePath}`)
 }
 
 /**
