@@ -139,6 +139,11 @@ export const getRunPort = async (taskId: string, runId: string): Promise<number>
   return res.data.port;
 };
 
+export const getRunSession = async (taskId: string, runId: string): Promise<{ sessionId: string | null; port: number }> => {
+  const res = await apiClient.get(`/tasks/${taskId}/runs/${runId}/session`);
+  return res.data;
+};
+
 export const resumeRun = async (taskId: string, runId: string): Promise<void> => {
   await apiClient.post(`/tasks/${taskId}/runs/${runId}/resume`);
 };
