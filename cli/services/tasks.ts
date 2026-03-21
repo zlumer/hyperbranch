@@ -44,25 +44,28 @@ export async function create(title: string, parentId?: string, description?: str
  */
 export async function list(): Promise<TaskFile[]> {
   const taskIds = await scanTasks()
-  const tasks: TaskFile[] = []
+  
+  const tasks = await Promise.all(
+    taskIds.map(async (id) => {
+      try {
+        return await get(id)
+      } catch (error) {
+        console.warn(`Failed to load task ${id}:`, error)
+        return null
+      }
+    })
+  )
 
-  for (const id of taskIds) {
-    try {
-      const task = await get(id)
-      tasks.push(task)
-    } catch (error) {
-      console.warn(`Failed to load task ${id}:`, error)
-    }
-  }
-
-  return tasks
+  return tasks.filter((t): t is TaskFile => t !== null)
 }
 
 /**
  * Get a specific task by ID.
  */
 export async function get(taskId: TaskId): Promise<TaskFile> {
-  return await loadTask(taskId.id)
+  const task = await loadTask(taskId.id)
+  task.runsCount = await Runs.getRunCount(taskId)
+  return task
 }
 
 /**

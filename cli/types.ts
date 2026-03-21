@@ -14,4 +14,5 @@ export interface TaskFile
 	path: string;
 	frontmatter: TaskFrontmatter;
 	body: string;
+	runsCount?: number;
 }

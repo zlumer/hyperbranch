@@ -1,6 +1,7 @@
 import { type Task } from "../../api/service";
 import { cn } from "../../lib/utils";
 import { useNavigate } from "react-router-dom";
+import { Terminal } from "lucide-react";
 
 interface TaskCardProps {
   task: Task;
@@ -29,6 +30,12 @@ export function TaskCard({ task, className, isDragging }: TaskCardProps) {
     >
       <div className="text-xs text-gray-500 font-mono">#{task.id}</div>
       <h3 className="font-normal text-sm text-gray-900 truncate" title={task.title}>{task.title}</h3>
+      {task.runsCount ? (
+        <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
+          <Terminal className="w-3.5 h-3.5" />
+          <span>{task.runsCount}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

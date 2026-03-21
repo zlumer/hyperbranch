@@ -65,8 +65,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const pollTasks = async () => {
+    try {
+      const fetchedTasks = await getTasks();
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error("Failed to poll tasks:", error);
+    }
+  };
+
   useEffect(() => {
     refreshTasks();
+    const interval = setInterval(pollTasks, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const moveTask = async (
