@@ -173,7 +173,7 @@ export async function listRuns(task: TaskId): Promise<RunInfo[]> {
     let drift;
     if (await exists(ctx.clonePath)) {
       try {
-        await Git.git(["fetch", "origin", baseBranch], ctx.clonePath);
+        await Git.git(["fetch", "origin", `${baseBranch}:refs/remotes/origin/${baseBranch}`], ctx.clonePath);
         drift = await Git.getDrift(ctx.clonePath, baseBranch);
       } catch (e) {
         // ignore fetch errors
@@ -271,7 +271,7 @@ export async function pullRun(
   const baseBranch = await Git.resolveBaseBranch(run.task);
 
   // 1. Fetch on host
-  await Git.git(["fetch", "origin", baseBranch], ctx.clonePath);
+  await Git.git(["fetch", "origin", `${baseBranch}:refs/remotes/origin/${baseBranch}`], ctx.clonePath);
 
   // 2. Execute git pull inside container
   const containerId = await Compose.getServiceContainerId(
