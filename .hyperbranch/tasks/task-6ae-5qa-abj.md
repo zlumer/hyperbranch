@@ -1,6 +1,6 @@
 ---
 id: 6ae-5qa-abj
-status: plan
+status: done
 parent: null
 dependencies: []
 ---
