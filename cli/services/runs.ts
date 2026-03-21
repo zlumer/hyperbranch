@@ -193,6 +193,21 @@ export async function listRuns(task: TaskId): Promise<RunInfo[]> {
   return runs.sort((a, b) => b.runId.idx - a.runId.idx);
 }
 
+export async function getRunCount(task: TaskId): Promise<number> {
+  const [branchRuns, cloneRuns, containerRuns] = await Promise.all([
+    findRunsByBranches(task),
+    findRunsByClones(task),
+    findRunsByContainers(task),
+  ]);
+
+  const allRuns = new Set<string>();
+  for (const r of [...branchRuns, ...cloneRuns, ...containerRuns]) {
+    allRuns.add(r.toString());
+  }
+
+  return allRuns.size;
+}
+
 export async function getRunFiles(
   branch: string,
   path: string = "",

@@ -6,6 +6,7 @@ export interface Task {
   status: "todo" | "plan" | "build" | "review" | "done" | "cancelled";
   description?: string;
   order: number;
+  runsCount?: number;
 }
 
 export type TaskStatus = Task["status"];
@@ -50,6 +51,7 @@ export const getTasks = async (): Promise<Task[]> => {
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: index,
+    runsCount: t.runsCount,
   }));
 };
 
@@ -62,6 +64,7 @@ export const getTask = async (id: string): Promise<Task> => {
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,
+    runsCount: t.runsCount,
   };
 };
 
@@ -76,6 +79,7 @@ export const createTask = async (
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,
+    runsCount: t.runsCount,
   };
 };
 
@@ -91,6 +95,7 @@ export const updateTaskStatus = async (
     status: t.frontmatter?.status || "todo",
     description: t.body,
     order: 0,
+    runsCount: t.runsCount,
   };
 };
 
