@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { getRun, getRunSession, acceptRun, pullRun, type Run } from "../api/service";
+import { getRun, getRunSession, acceptRun, pullRun, type Run, getRunPort } from "../api/service";
 
 export function RunWorkspacePage() {
   const { taskId, runId } = useParams();
@@ -21,17 +21,19 @@ export function RunWorkspacePage() {
           console.error(err);
           return null;
         }),
+		getRunPort(taskId, runId).catch(err => {
+		  console.error("Failed to get run port", err);
+		  return null;
+		}),
         getRunSession(taskId, runId).catch(err => {
           console.error("Failed to get session", err);
           return null;
         })
       ])
-        .then(([runData, sessionData]) => {
+        .then(([runData, portData, sessionData]) => {
           if (runData) setRun(runData);
-          if (sessionData) {
-            setPort(sessionData.port);
-            setSessionId(sessionData.sessionId);
-          }
+          if (portData) setPort(portData);
+          if (sessionData) setSessionId(sessionData.sessionId);
         })
         .finally(() => setLoading(false));
     }

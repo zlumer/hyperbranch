@@ -1,6 +1,6 @@
 ---
 id: 6ab-okr-ag7
-status: plan
+status: done
 parent: null
 dependencies: []
 ---
