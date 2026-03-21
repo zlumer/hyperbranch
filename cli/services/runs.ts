@@ -105,7 +105,7 @@ export interface RunInfo {
   branchName: string;
   status: string;
   logsPath: string; // Deprecated
-  drift?: { ahead: number; behind: number };
+  drift?: { ahead: number; behind: number; isFfAble: boolean };
 }
 
 async function findRunsByBranches(task: TaskId): Promise<RunId[]> {

@@ -293,16 +293,27 @@ export async function getUnmergedCommits(
 export async function getDrift(
   cwd: string,
   baseBranch: string,
-): Promise<{ ahead: number; behind: number }> {
+): Promise<{ ahead: number; behind: number; isFfAble: boolean }> {
   try {
     const output = await git(
       ["rev-list", "--left-right", "--count", `HEAD...origin/${baseBranch}`],
       cwd,
     );
     const [ahead, behind] = output.split("\t").map((n) => parseInt(n, 10));
-    return { ahead: ahead || 0, behind: behind || 0 };
+
+    let isFfAble = false;
+    if (behind > 0) {
+      try {
+        await git(["merge-base", "--is-ancestor", "HEAD", `origin/${baseBranch}`], cwd);
+        isFfAble = true;
+      } catch {
+        isFfAble = false;
+      }
+    }
+
+    return { ahead: ahead || 0, behind: behind || 0, isFfAble };
   } catch {
-    return { ahead: 0, behind: 0 };
+    return { ahead: 0, behind: 0, isFfAble: false };
   }
 }
 

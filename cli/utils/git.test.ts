@@ -57,7 +57,7 @@ Deno.test("getNextRunBranch - increments index", async () => {
 	const task = new TaskId("123");
 	const prefix = task.runBranchPrefix();
 	const commandStub = mockGit({
-		[`branch --list ${prefix}*`]: { 
+		[`branch -a --list *${prefix}*`]: { 
 			success: true, 
 			stdout: `  ${prefix}1\n  ${prefix}2\n` 
 		}
@@ -74,7 +74,7 @@ Deno.test("getNextRunBranch - starts at 1", async () => {
 	const task = new TaskId("456");
 	const prefix = task.runBranchPrefix();
 	const commandStub = mockGit({
-		[`branch --list ${prefix}*`]: { success: true, stdout: "" }
+		[`branch -a --list *${prefix}*`]: { success: true, stdout: "" }
 	});
 	try {
 		const branch = await Git.getNextRunBranch(task);

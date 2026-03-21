@@ -13,6 +13,7 @@ import { rmCommand } from "./commands/rm.ts"
 import { serverCommand } from "./commands/server.ts"
 import { portCommand } from "./commands/port.ts"
 import { mergeCommand } from "./commands/merge.ts"
+import { syncCommand } from "./commands/sync.ts"
 
 // --- File I/O ---
 
@@ -69,6 +70,9 @@ async function main()
 		case "merge":
 			await mergeCommand(args)
 			break
+		case "sync":
+			await syncCommand(args)
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
@@ -83,6 +87,7 @@ async function main()
 			console.log("  server [--port <port>]")
 			console.log("  port <run-id> <port>")
 			console.log("  merge <task-id> <run-index> [--strategy <merge|squash|rebase>] [--cleanup]")
+			console.log("  sync <task-id>/<run-index>")
 			break
 	}
 }
