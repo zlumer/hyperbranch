@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { getRun, getRunPort, acceptRun, pullRun, type Run } from "../api/service";
+import { getRun, getRunSession, acceptRun, pullRun, type Run } from "../api/service";
 
 export function RunWorkspacePage() {
   const { taskId, runId } = useParams();
   const navigate = useNavigate();
   const [run, setRun] = useState<Run | null>(null);
   const [port, setPort] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [pulling, setPulling] = useState(false);
@@ -20,14 +21,17 @@ export function RunWorkspacePage() {
           console.error(err);
           return null;
         }),
-        getRunPort(taskId, runId).catch(err => {
-          console.error("Failed to get port", err);
+        getRunSession(taskId, runId).catch(err => {
+          console.error("Failed to get session", err);
           return null;
         })
       ])
-        .then(([runData, portData]) => {
+        .then(([runData, sessionData]) => {
           if (runData) setRun(runData);
-          if (portData) setPort(portData);
+          if (sessionData) {
+            setPort(sessionData.port);
+            setSessionId(sessionData.sessionId);
+          }
         })
         .finally(() => setLoading(false));
     }
@@ -169,7 +173,7 @@ export function RunWorkspacePage() {
       <div className="flex-1 bg-white relative">
         {port ? (
           <iframe
-            src={`http://localhost:${port}`}
+            src={sessionId ? `http://localhost:${port}/?session=${sessionId}` : `http://localhost:${port}`}
             className="absolute inset-0 w-full h-full border-0"
             title="Workspace"
             sandbox="allow-same-origin allow-scripts allow-forms"
