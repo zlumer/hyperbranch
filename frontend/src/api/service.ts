@@ -16,7 +16,7 @@ export interface Run {
   taskId: string;
   status: string;
   createdAt: string;
-  drift?: { ahead: number; behind: number };
+  drift?: { ahead: number; behind: number; isFfAble: boolean };
 }
 
 export interface FileNode {
@@ -165,8 +165,8 @@ export const acceptRun = async (taskId: string, runId: string, strategy: "merge"
   await apiClient.post(`/tasks/${taskId}/runs/${runId}/merge`, { strategy });
 };
 
-export const pullRun = async (taskId: string, runId: string, strategy: "merge" | "rebase"): Promise<void> => {
-  await apiClient.post(`/tasks/${taskId}/runs/${runId}/pull`, { strategy });
+export const syncRun = async (taskId: string, runId: string): Promise<void> => {
+  await apiClient.post(`/tasks/${taskId}/runs/${runId}/sync`);
 };
 
 export const getFiles = async (
