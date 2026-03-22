@@ -1,6 +1,6 @@
 ---
 id: 6ae-6cg-xoj
-status: plan
+status: done
 parent: null
 dependencies: []
 ---
