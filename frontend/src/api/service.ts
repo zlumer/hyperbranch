@@ -118,9 +118,14 @@ export const getRuns = async (taskId: string): Promise<Run[]> => {
   }));
 };
 
+export const getModels = async (taskId: string): Promise<string[]> => {
+  const res = await apiClient.get(`/tasks/${taskId}/models`);
+  return res.data.models;
+};
+
 export const launchRun = async (
   taskId: string,
-  payload: { prompt: string; agentMode: string, commit: boolean },
+  payload: { prompt: string; agentMode: string, commit: boolean, model?: string },
 ): Promise<Run> => {
   const res = await apiClient.post(`/tasks/${taskId}/run`, payload);
   const r = res.data;

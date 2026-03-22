@@ -20,6 +20,7 @@ import {
   patch as id_index__patch,
 } from "./routes/{id}/index.ts";
 import { post as id_run__post } from "./routes/{id}/run.ts";
+import { get as id_models__get } from "./routes/{id}/models.ts";
 
 export const router = {
   root: {
@@ -82,4 +83,5 @@ export const router = {
     patch: id_index__patch.route({ path: "/{id}", method: "PATCH" }),
   },
   run: id_run__post.route({ path: "/{id}/run", method: "POST" }),
+  models: id_models__get.route({ path: "/{id}/models", method: "GET" }),
 };

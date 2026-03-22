@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, resumeRun, stopRun, type Run, type Task } from "../api/service";
+import { getModels, getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, resumeRun, stopRun, type Run, type Task } from "../api/service";
 import { RunLaunchConfig } from "../components/RunLaunchConfig";
 import { RunListItem } from "../components/RunListItem";
 
@@ -13,6 +13,9 @@ export function TaskDetailsPage() {
   const [showConfig, setShowConfig] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [agentMode, setAgentMode] = useState("plan");
+  const [model, setModel] = useState(() => localStorage.getItem("HB_LAST_MODEL") || "");
+  const [models, setModels] = useState<string[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
 
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
@@ -53,14 +56,26 @@ export function TaskDetailsPage() {
       return () => {
         ws.close();
       };
+      if (showConfig && taskId && models.length === 0 && !isLoadingModels) {
+        setIsLoadingModels(true);
+        getModels(taskId)
+          .then(setModels)
+          .catch((err) => console.error("Failed to load models", err))
+          .finally(() => setIsLoadingModels(false));
+      }
     }
-  }, [taskId]);
+  }, [taskId, showConfig]);
 
   const handleLaunchRun = async () => {
     if (!taskId) return;
     setIsLaunching(true);
     try {
-      await launchRun(taskId, { prompt, agentMode, commit: true });
+      if (model) {
+        localStorage.setItem("HB_LAST_MODEL", model);
+      } else {
+        localStorage.removeItem("HB_LAST_MODEL");
+      }
+      await launchRun(taskId, { prompt, agentMode, commit: true, ...(model ? { model } : {}) });
       setShowConfig(false);
       const updatedRuns = await getRuns(taskId);
       setRuns(updatedRuns);
@@ -175,6 +190,10 @@ export function TaskDetailsPage() {
             setPrompt={setPrompt}
             agentMode={agentMode}
             setAgentMode={setAgentMode}
+            model={model}
+            setModel={setModel}
+            models={models}
+            isLoadingModels={isLoadingModels}
             isLaunching={isLaunching}
             onLaunch={handleLaunchRun}
           />

@@ -3,6 +3,10 @@ export interface RunLaunchConfigProps {
   setPrompt: (p: string) => void;
   agentMode: string;
   setAgentMode: (m: string) => void;
+  model: string;
+  setModel: (m: string) => void;
+  models: string[];
+  isLoadingModels: boolean;
   isLaunching: boolean;
   onLaunch: () => void;
 }
@@ -12,6 +16,10 @@ export function RunLaunchConfig({
   setPrompt,
   agentMode,
   setAgentMode,
+  model,
+  setModel,
+  models,
+  isLoadingModels,
   isLaunching,
   onLaunch,
 }: RunLaunchConfigProps) {
@@ -40,6 +48,29 @@ export function RunLaunchConfig({
         >
           <option value="plan">Plan</option>
           <option value="build">Build</option>
+        </select>
+      </div>
+      <div className="mb-4 border-t pt-4">
+        <h4 className="text-sm font-medium text-gray-900 mb-2">Advanced Settings</h4>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Model
+        </label>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={isLoadingModels}
+          className="w-full border border-gray-300 rounded p-2 focus:ring-blue-500 focus:border-blue-500 bg-white disabled:opacity-50"
+        >
+          <option value="">Default</option>
+          {isLoadingModels ? (
+            <option disabled>Loading models...</option>
+          ) : (
+            models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))
+          )}
         </select>
       </div>
       <div className="flex justify-end">

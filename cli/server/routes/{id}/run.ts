@@ -10,9 +10,10 @@ export const post = os
     id: z.string(),
     prompt: z.string().optional(),
     agentMode: z.string().optional(),
+    model: z.string().optional(),
   }).passthrough())
   .handler(async ({ input }) => {
-    const { id, prompt, agentMode, ...body } = input
+    const { id, prompt, agentMode, model, ...body } = input
     const taskId = TaskId.from(id)
     if (!taskId) throw new ORPCError("BAD_REQUEST", { message: "Invalid task ID" })
     try {
@@ -40,9 +41,19 @@ export const post = os
             const session = await client.session.create({})
             if (session.error) throw new Error(JSON.stringify(session.error))
             const sessionId = session.data.id
+            const promptBody: any = { agent: agentMode || "build", parts: [{ type: "text", text: prompt }] }
+            
+            if (model) {
+              const [providerID, ...rest] = model.split("/")
+              const modelID = rest.join("/")
+              if (providerID && modelID) {
+                promptBody.model = { providerID, modelID }
+              }
+            }
+
             await client.session.prompt({
               path: { id: sessionId },
-              body: { agent: agentMode || "build", parts: [{ type: "text", text: prompt }] }
+              body: promptBody
             })
           } catch (e) {
             const runObj = RunId.fromString(runId)
