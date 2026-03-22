@@ -41,11 +41,12 @@ export function TaskDetailsPage() {
           const message = JSON.parse(event.data);
           if (message.type === "runs_update" && Array.isArray(message.data)) {
             // Map backend run objects to frontend Run interface
-            const updatedRuns = message.data.map((r: { runId: string, status: string, createdAt?: string }) => ({
+            const updatedRuns = message.data.map((r: any) => ({
               id: r.runId.split("/").pop() || r.runId,
               taskId,
               status: r.status,
               createdAt: r.createdAt || "",
+              drift: r.drift,
             }));
             setRuns(updatedRuns);
           }

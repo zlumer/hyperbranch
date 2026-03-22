@@ -43,10 +43,22 @@ export function RunWorkspacePage() {
 
       ws.onmessage = (event) => {
         try {
-          const updatedRuns: Run[] = JSON.parse(event.data);
-          const updatedRun = updatedRuns.find(r => String(r.id) === String(runId));
-          if (updatedRun) {
-            setRun(updatedRun);
+          const message = JSON.parse(event.data);
+          if (message.type === "runs_update" && Array.isArray(message.data)) {
+            const updatedRunData = message.data.find((r: any) => {
+              const rId = r.runId.split("/").pop() || r.runId;
+              return String(rId) === String(runId);
+            });
+            
+            if (updatedRunData) {
+              setRun({
+                id: updatedRunData.runId.split("/").pop() || updatedRunData.runId,
+                taskId,
+                status: updatedRunData.status,
+                createdAt: updatedRunData.createdAt || "",
+                drift: updatedRunData.drift
+              });
+            }
           }
         } catch (err) {
           console.error("Failed to parse websocket message", err);
