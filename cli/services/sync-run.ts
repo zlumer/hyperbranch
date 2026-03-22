@@ -4,7 +4,7 @@ import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";
 import { getRunContext } from "../runtime/context.ts";
 import { RunId } from "../utils/id.ts";
-import { createOpencodeClient } from "npm:@opencode-ai/sdk";
+import { getOpencodeService } from "./opencode.ts";
 import { getHostPort } from "./runs.ts";
 
 export async function syncRun(run: RunId): Promise<void> {
@@ -83,26 +83,12 @@ export async function syncRun(run: RunId): Promise<void> {
 
 async function triggerSmartMerge(run: RunId, containerId: string, prompt: string) {
   const port = await getHostPort(run, 4096);
-  
-  const client = createOpencodeClient({
-    baseUrl: `http://localhost:${port}`,
-  });
+  const service = getOpencodeService(port);
 
   try {
-    // Start session without awaiting completion (async)
-    client.session.create({}).then(async (session) => {
-      if (session.error) {
-        console.error(`Failed to create opencode session: ${JSON.stringify(session.error)}`);
-        return;
-      }
-      const sessionId = session.data.id;
-      await client.session.prompt({
-        path: { id: sessionId },
-        body: { agent: "build", parts: [{ type: "text", text: prompt }] }
-      });
+    service.queueAction(async () => {
+      const sessionId = await service.createSessionWithPrompt(prompt, { agentMode: "build" });
       console.log(`Started opencode smart merge session ${sessionId} for run ${run} on port ${port}`);
-    }).catch(err => {
-      console.error(`Failed to start opencode session: ${err.message}`);
     });
   } catch (err: any) {
     console.error(`Failed to trigger opencode session: ${err.message}`);

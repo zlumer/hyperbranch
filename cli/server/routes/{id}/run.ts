@@ -3,7 +3,7 @@ import { z } from "zod"
 import * as Runs from "../../../services/runs.ts"
 import { TaskId, RunId } from "../../../utils/id.ts"
 import { ORPCError } from "@orpc/server"
-import { createOpencodeClient } from "npm:@opencode-ai/sdk"
+import { getOpencodeService } from "../../../services/opencode.ts"
 
 export const post = os
   .input(z.object({
@@ -21,44 +21,29 @@ export const post = os
       if (prompt) {
         (async () => {
           const { runId, port } = result
+          const service = getOpencodeService(port)
           const timeout = 120000
           const startTime = Date.now()
-          let healthy = false
+          
           while (Date.now() - startTime < timeout) {
-            try {
-              const res = await fetch(`http://localhost:${port}/global/health`)
-              if (res.ok && (await res.json()).healthy) { healthy = true; break; }
-            } catch (_) {}
+            if (service.currentState() !== "offline") break
             await new Promise((r) => setTimeout(r, 2000))
           }
-          if (!healthy) {
+          
+          if (service.currentState() === "offline") {
             const runObj = RunId.fromString(runId)
             if (runObj) await Runs.stopRun(runObj).catch(() => {})
             return
           }
-          try {
-            const client = createOpencodeClient({ baseUrl: `http://localhost:${port}` })
-            const session = await client.session.create({})
-            if (session.error) throw new Error(JSON.stringify(session.error))
-            const sessionId = session.data.id
-            const promptBody: any = { agent: agentMode || "build", parts: [{ type: "text", text: prompt }] }
-            
-            if (model) {
-              const [providerID, ...rest] = model.split("/")
-              const modelID = rest.join("/")
-              if (providerID && modelID) {
-                promptBody.model = { providerID, modelID }
-              }
+          
+          service.queueAction(async () => {
+            try {
+              await service.createSessionWithPrompt(prompt, { agentMode, model })
+            } catch (e) {
+              const runObj = RunId.fromString(runId)
+              if (runObj) await Runs.stopRun(runObj).catch(() => {})
             }
-
-            await client.session.prompt({
-              path: { id: sessionId },
-              body: promptBody
-            })
-          } catch (e) {
-            const runObj = RunId.fromString(runId)
-            if (runObj) await Runs.stopRun(runObj).catch(() => {})
-          }
+          })
         })()
       }
       return result

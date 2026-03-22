@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as Runs from "../../../../../services/runs.ts";
 import { ORPCError } from "@orpc/server";
 import { parseRouteIds } from "./utils.ts";
-import { createOpencodeClient } from "npm:@opencode-ai/sdk";
+import { getOpencodeService } from "../../../../../services/opencode.ts";
 
 export const get = os
   .input(z.object({ id: z.string(), runId: z.string() }))
@@ -16,23 +16,9 @@ export const get = os
       const port = await Runs.getHostPort(runId, 4096);
 
       try {
-        const client = createOpencodeClient({
-          baseUrl: `http://localhost:${port}`,
-        });
-        const { data: sessions, error } = await client.session.list({});
-
-        if (error) {
-          throw new Error(JSON.stringify(error));
-        }
-
-        const latestSession = sessions && sessions.length > 0
-          ? sessions[0]
-          : null;
-
-        return {
-          sessionId: latestSession?.id || null,
-          port,
-        };
+        const service = getOpencodeService(port);
+        const sessionId = await service.getLatestSessionId();
+        return { sessionId, port };
       } catch (err: any) {
         // If opencode API fails but port exists, we still return the port
         console.error("Failed to fetch opencode sessions:", err.message);
