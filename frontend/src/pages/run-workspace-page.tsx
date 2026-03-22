@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getRun, getRunSession, acceptRun, syncRun, type Run, getRunPort, getRunsStatusWebSocketUrl } from "../api/service";
+import { useMergeStrategy } from "../hooks/useMergeStrategy";
 
 export function RunWorkspacePage() {
   const { taskId, runId } = useParams();
@@ -11,7 +12,7 @@ export function RunWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("squash");
+  const [mergeStrategy, setMergeStrategy] = useMergeStrategy();
 
   useEffect(() => {
     if (taskId && runId) {
@@ -158,8 +159,8 @@ export function RunWorkspacePage() {
                   onChange={(e) => setMergeStrategy(e.target.value as any)}
                   className="border border-gray-300 rounded px-2 py-1 bg-white"
                 >
-                  <option value="squash">Squash</option>
                   <option value="merge">Merge</option>
+                  <option value="squash">Squash</option>
                   <option value="rebase">Rebase</option>
                 </select>
                 <button 

@@ -77,8 +77,8 @@ export function RunListItem({
               onChange={(e) => setMergeStrategy(e.target.value as "merge" | "squash" | "rebase")}
               className="border border-gray-300 rounded px-2 py-1"
             >
-              <option value="squash">Squash</option>
               <option value="merge">Merge</option>
+              <option value="squash">Squash</option>
               <option value="rebase">Rebase</option>
             </select>
             <button onClick={(e) => { e.stopPropagation(); onAccept(run.id); }} className="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700">Confirm Accept</button>
