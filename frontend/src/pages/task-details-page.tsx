@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getModels, getRuns, getTask, getRunsStatusWebSocketUrl, launchRun, deleteRun, acceptRun, resumeRun, stopRun, type Run, type Task } from "../api/service";
 import { RunLaunchConfig } from "../components/RunLaunchConfig";
 import { RunListItem } from "../components/RunListItem";
+import { useMergeStrategy } from "../hooks/useMergeStrategy";
 
 export function TaskDetailsPage() {
   const { taskId } = useParams();
@@ -20,7 +21,7 @@ export function TaskDetailsPage() {
 
   const [deletingRunId, setDeletingRunId] = useState<string | null>(null);
   const [acceptingRunId, setAcceptingRunId] = useState<string | null>(null);
-  const [mergeStrategy, setMergeStrategy] = useState<"merge" | "squash" | "rebase">("squash");
+  const [mergeStrategy, setMergeStrategy] = useMergeStrategy();
 
   useEffect(() => {
     if (taskId) {
