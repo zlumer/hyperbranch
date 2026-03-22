@@ -6,6 +6,7 @@ import { router } from "./router.ts";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodSmartCoercionPlugin } from "@orpc/zod";
 import { ORPCError } from "@orpc/server";
+import { startModelAutoloader } from "../services/models.ts";
 
 // Generate API key if not set
 export function ensureApiKey() {
@@ -74,6 +75,7 @@ const port = parseInt(Deno.env.get("PORT") || "8000");
 // Check if we are being run directly
 if (import.meta.main) {
   ensureApiKey();
+  startModelAutoloader();
   console.log(`Server starting on http://localhost:${port}`);
   Deno.serve({ port }, app.fetch);
 }

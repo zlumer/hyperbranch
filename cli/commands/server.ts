@@ -3,6 +3,7 @@ import { Args } from "@std/cli/parse-args";
 import app, { ensureApiKey } from "../server/main.ts";
 import { z } from "zod";
 import { parseZodArgs } from "../utils/zod.ts";
+import { startModelAutoloader } from "../services/models.ts";
 
 const ServerArgsSchema = z.object({
   port: z.union([z.string(), z.number()]).optional(),
@@ -20,6 +21,7 @@ export function serverCommand(rawArgs: Args) {
   }
 
   ensureApiKey();
+  startModelAutoloader();
   console.log(`Server starting on http://localhost:${port}`);
   Deno.serve({ port }, app.fetch);
 }
