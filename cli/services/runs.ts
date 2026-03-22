@@ -5,6 +5,7 @@ import * as Lifecycle from "../runtime/lifecycle.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";
 import { getRunContext } from "../runtime/context.ts";
+import { destroyOpencodeService } from "./opencode.ts";
 import { RunId, TaskId } from "../utils/id.ts";
 import { RUNS_DIR } from "../utils/paths.ts";
 
@@ -55,11 +56,19 @@ export async function run(
 
 export async function stopRun(run: RunId): Promise<void> {
   const ctx = getRunContext(run);
+  const { port } = await Lifecycle.inspect(ctx);
+  if (port) {
+    destroyOpencodeService(port);
+  }
   await Lifecycle.stop(ctx);
 }
 
 export async function destroyRun(run: RunId): Promise<void> {
   const ctx = getRunContext(run);
+  const { port } = await Lifecycle.inspect(ctx);
+  if (port) {
+    destroyOpencodeService(port);
+  }
   await Lifecycle.destroy(ctx);
 }
 
