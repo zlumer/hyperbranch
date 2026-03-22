@@ -58,7 +58,7 @@ export function TaskDetailsPage() {
       };
       if (showConfig && taskId && models.length === 0 && !isLoadingModels) {
         setIsLoadingModels(true);
-        getModels(taskId)
+        getModels(taskId as string)
           .then(setModels)
           .catch((err) => console.error("Failed to load models", err))
           .finally(() => setIsLoadingModels(false));
