@@ -1,6 +1,6 @@
 ---
 id: 6ae-hm8-ugb
-status: plan
+status: done
 parent: null
 dependencies: []
 ---
