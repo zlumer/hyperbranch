@@ -4,7 +4,6 @@ import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
 import { join } from "@std/path";
 import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
-import { exists } from "@std/fs/exists";
 
 let cachedModels: string[] | null = null;
 let isFetching = false;
@@ -105,28 +104,10 @@ async function fetchModels(taskId: TaskId): Promise<string[]> {
     // 1. Create a temporary clone
     await GitClones.createClone(cloneName, baseBranch, clonePath);
 
-    // 2. Prepare docker assets
-    await Docker.prepareRunAssets(clonePath, {});
+    // 2. Scaffold Environment
+    await Docker.scaffoldRunEnvironment(clonePath);
 
-    // 3. Write env compose file (to match permissions for volume mount)
-    const userId = await Docker.getUserId();
-    const env: Record<string, string> = {
-      HB_USER: userId,
-      HB_UID: userId.split(":")[0],
-      HB_GID: userId.split(":")[1] || userId.split(":")[0],
-    };
-    await Docker.writeEnvComposeFile(clonePath, env);
-
-    // 3.5 Fix fallback: Copy .env.run to .env or create an empty .env so docker-compose run works
-    const envRunPath = join(HYPERBRANCH_DIR, ".env.run");
-    const envDestPath = join(clonePath, ".env");
-    if (await exists(envRunPath)) {
-      await Deno.copyFile(envRunPath, envDestPath);
-    } else {
-      await Deno.writeTextFile(envDestPath, "");
-    }
-
-    // 4. Run the models command using docker compose run
+    // 3. Run the models command using docker compose run
     // Using a blank entrypoint to bypass the default opencode server startup
     const composeFile = join(clonePath, "docker-compose.yml");
     

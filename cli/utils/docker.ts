@@ -1,6 +1,8 @@
 import { dirname, fromFileUrl, join } from "@std/path"
 import { ensureDir } from "@std/fs/ensure-dir"
 import { copy } from "@std/fs/copy"
+import { exists } from "@std/fs/exists"
+import { HYPERBRANCH_DIR } from "./paths.ts"
 
 export interface DockerConfig {
   image: string
@@ -51,6 +53,38 @@ export async function writeEnvComposeFile(
     .map(([k, v]) => `${k}=${v}`)
     .join("\n")
   await Deno.writeTextFile(join(runDir, ".env.compose"), envContent)
+}
+
+export async function scaffoldRunEnvironment(
+  runDir: string,
+  envVars: Record<string, string> = {},
+  options?: {
+    dockerfile?: string;
+    dockerCompose?: string;
+    entrypoint?: string;
+  }
+) {
+  // 1. Prepare static assets
+  await prepareRunAssets(runDir, options);
+
+  // 2. Write .env.compose
+  const userId = await getUserId();
+  const env: Record<string, string> = {
+    HB_USER: userId,
+    HB_UID: userId.split(":")[0],
+    HB_GID: userId.split(":")[1] || userId.split(":")[0],
+    ...envVars,
+  };
+  await writeEnvComposeFile(runDir, env);
+
+  // 3. Copy or create .env
+  const envRunPath = join(HYPERBRANCH_DIR, ".env.run");
+  const envDestPath = join(runDir, ".env");
+  if (await exists(envRunPath)) {
+    await copy(envRunPath, envDestPath, { overwrite: true });
+  } else {
+    await Deno.writeTextFile(envDestPath, "");
+  }
 }
 
 export async function buildImage(

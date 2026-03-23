@@ -44,29 +44,16 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
 
   await GitClones.createClone(ctx.branchName, baseBranch, ctx.clonePath);
 
-  // 3. Asset Preparation
-  await Docker.prepareRunAssets(ctx.paths.runDir, {
-    dockerfile: options.dockerfile,
-    // If we support custom compose files in future, pass here
-  });
-
-  // 4. Write .env.compose
-  // We need to get the user ID to ensure file permissions are correct
-  const userId = await Docker.getUserId();
-
+  // 3. Scaffold Environment
   // Get git config for auto-commits
   const gitName = await Git.getConfig("user.name") || "";
   const gitEmail = await Git.getConfig("user.email") || "";
   
-  const env: Record<string, string> = {
+  const envVars: Record<string, string> = {
     HYPERBRANCH_TASK_ID: ctx.runId.task.id,
     HYPERBRANCH_TASK_FILE: taskFileRelative,
     HYPERBRANCH_AGENT_MODE: "build",
     HYPERBRANCH_PROMPT: options.prompt || "",
-    // Platform specific
-    HB_USER: userId,
-    HB_UID: userId.split(":")[0],
-    HB_GID: userId.split(":")[1] || userId.split(":")[0],
     // Git Identity
     GIT_AUTHOR_NAME: gitName,
     GIT_AUTHOR_EMAIL: gitEmail,
@@ -76,14 +63,11 @@ export async function prepare(ctx: RunContext, options: PrepareOptions = {}): Pr
     ...options.env,
   };
 
-  await Docker.writeEnvComposeFile(ctx.paths.runDir, env);
+  await Docker.scaffoldRunEnvironment(ctx.paths.runDir, envVars, {
+    dockerfile: options.dockerfile,
+  });
 
-  // 5. Copy hyperbranch env vars to the process env
-  const source = join(HYPERBRANCH_DIR, ".env.run")
-  if (await exists(source))
-    await Deno.copyFile(source, join(ctx.paths.runDir, ".env"))
-
-  // 6. Copy extra files if specified
+  // 4. Copy extra files if specified
   const extraFiles = join(HYPERBRANCH_DIR, "add")
   if (await exists(extraFiles))
     await copyDir(extraFiles, ctx.clonePath, { overwrite: true })
