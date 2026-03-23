@@ -34,7 +34,7 @@ export const post = os
             const runObj = RunId.fromString(runId)
             if (runObj)
               await Runs.stopRun(runObj).catch(() => {})
-		        throw new Error("Opencode service is offline after waiting for 2 minutes. Stopping run and aborting prompt execution.")
+		        throw new Error(`Opencode service is offline after waiting for 2 minutes. Stopping run and aborting prompt execution. id: ${runId} state: ${service.currentState()}`);
           }
           
           try {
@@ -42,6 +42,7 @@ export const post = os
           } catch (e) {
             const runObj = RunId.fromString(runId)
             if (runObj) await Runs.stopRun(runObj).catch(() => {})
+            console.error(`Failed to create session with prompt. id: ${runId}, state: ${service.currentState()}`, e)
           }
         })()
       }

@@ -155,7 +155,7 @@ export class OpencodeService {
     this.setState("offline");
   }
 
-  private async connectLoop() {
+  private async connectLoop(retryCount = 60, retryDelay = 2000): Promise<void> {
     console.log("[OpencodeService] connectLoop started");
     if (this.destroyed) {
       console.log("[OpencodeService] instance destroyed, exiting connectLoop");
@@ -164,19 +164,24 @@ export class OpencodeService {
     
     try {
       console.log(`[OpencodeService] fetching health from http://localhost:${this.port}/global/health`);
-      const res = await fetch(`http://localhost:${this.port}/global/health`);
-      if (res.ok) {
-        const data = await res.json();
-        console.log(`[OpencodeService] health response:`, data);
-        if (data.healthy && this.state === "offline") {
-          console.log("[OpencodeService] healthy and offline, updating state");
-          // Force update to recalculate state based on current session statuses
-          // if any, otherwise default to idle
-          this.updateState(true);
+      let lastStatus = NaN;
+      while (retryCount-- > 0) {
+        const res = await fetch(`http://localhost:${this.port}/global/health`);
+        if (res.ok) {
+          const data = await res.json();
+          console.log(`[OpencodeService] health response:`, data);
+          if (data.healthy && this.state === "offline") {
+            console.log("[OpencodeService] healthy and offline, updating state");
+            // Force update to recalculate state based on current session statuses
+            // if any, otherwise default to idle
+            this.updateState(true);
+            break;
+          }
         }
-      } else {
-        console.log(`[OpencodeService] health check failed with status: ${res.status}`);
+        lastStatus = res.status
+        await new Promise(r => setTimeout(r, retryDelay));
       }
+      console.log(`[OpencodeService] health check failed with status: ${lastStatus}`);
     } catch (e: any) {
       console.log(`[OpencodeService] health check fetch failed: ${e.message}`);
       // fetch failed, wait and retry
@@ -223,6 +228,9 @@ export class OpencodeService {
     if (!event || !event.type) return;
     
     switch (event.type) {
+      case "server.connected":
+        this.setState("idle", { onlyFromState: "offline" });
+        break;
       case "session.status":
         if (event.properties) {
           const { sessionID, status } = event.properties;
@@ -287,8 +295,11 @@ export class OpencodeService {
     }
   }
 
-  private setState(newState: OpencodeState) {
-    if (this.state === newState) return;
+  private setState(newState: OpencodeState, params: { onlyFromState?: OpencodeState } = {}) {
+    if (this.state === newState)
+      return;
+    if (params.onlyFromState && this.state !== params.onlyFromState)
+      return;
     const oldState = this.state;
     this.state = newState;
     
