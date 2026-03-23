@@ -155,6 +155,7 @@ export class OpencodeService {
     this.setState("offline");
   }
 
+  //AI! print logs on each step inside this function to debug connection issues and state transitions
   private async connectLoop() {
     if (this.destroyed) return;
     
