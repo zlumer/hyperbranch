@@ -32,19 +32,17 @@ export const post = os
           
           if (service.currentState() === "offline") {
             const runObj = RunId.fromString(runId)
-            if (runObj) await Runs.stopRun(runObj).catch(() => {})
-			throw new Error("Opencode service is offline after waiting for 2 minutes. Stopping run and aborting prompt execution.")
-            return
+            if (runObj)
+              await Runs.stopRun(runObj).catch(() => {})
+		        throw new Error("Opencode service is offline after waiting for 2 minutes. Stopping run and aborting prompt execution.")
           }
           
-          service.queueAction(async () => {
-            try {
-              await service.createSessionWithPrompt(prompt, { agentMode, model })
-            } catch (e) {
-              const runObj = RunId.fromString(runId)
-              if (runObj) await Runs.stopRun(runObj).catch(() => {})
-            }
-          })
+          try {
+            await service.createSessionWithPrompt(prompt, { agentMode, model })
+          } catch (e) {
+            const runObj = RunId.fromString(runId)
+            if (runObj) await Runs.stopRun(runObj).catch(() => {})
+          }
         })()
       }
       return result
