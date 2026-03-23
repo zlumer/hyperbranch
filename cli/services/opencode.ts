@@ -1,5 +1,5 @@
 import { createOpencodeClient } from "npm:@opencode-ai/sdk";
-import type { OpencodeClient } from "npm:@opencode-ai/sdk";
+import type { Event, OpencodeClient } from "npm:@opencode-ai/sdk";
 
 export type OpencodeState = "idle" | "working" | "blocked" | "offline" | "error";
 
@@ -103,10 +103,11 @@ export class OpencodeService {
     }
     const sessionId = sessionRes.data.id;
     
-    const promptBody: any = { 
+    let promptBody = { 
       agent: config?.agentMode || "build", 
-      parts: [{ type: "text", text: prompt }] 
-    };
+      parts: [{ type: "text" as const, text: prompt }],
+	  model: undefined as { providerID: string, modelID: string } | undefined,
+    }
             
     if (config?.model) {
       const [providerID, ...rest] = config.model.split("/");
@@ -193,7 +194,7 @@ export class OpencodeService {
     }
   }
 
-  private handleEvent(event: any) {
+  private handleEvent(event: Event) {
     if (!event || !event.type) return;
     
     switch (event.type) {
@@ -210,8 +211,8 @@ export class OpencodeService {
         }
         break;
       case "session.idle":
-        if (event.properties?.id) {
-           this.sessionsStatus[event.properties.id] = "idle";
+        if (event.properties?.sessionID) {
+           this.sessionsStatus[event.properties.sessionID] = "idle";
         }
         break;
       case "permission.updated":
@@ -222,10 +223,10 @@ export class OpencodeService {
         }
         break;
       case "permission.replied":
-        if (event.properties?.sessionID && event.properties?.id) {
+        if (event.properties?.sessionID) {
            const sid = event.properties.sessionID;
            if (this.sessionPermissions[sid]) {
-             this.sessionPermissions[sid].delete(event.properties.id);
+             this.sessionPermissions[sid].delete(event.properties.sessionID);
            }
         }
         break;

@@ -31,26 +31,6 @@ export async function getAvailableModels(taskId: TaskId): Promise<string[]> {
   }
 }
 
-export function startModelAutoloader() {
-  // Run immediately, then every 1 minute
-  const fetchAndUpdate = async () => {
-    try {
-      const containerNames = await Docker.findContainersByPartialName("-task-1");
-      if (containerNames.length > 0) {
-        const models = await fetchModelsFromContainer(containerNames[0]);
-        if (models && models.length > 0) {
-          cachedModels = models;
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to autoload models in background:", err);
-    }
-  };
-
-  fetchAndUpdate();
-  setInterval(fetchAndUpdate, 60 * 1000);
-}
-
 async function fetchModelsFromContainer(containerName: string): Promise<string[]> {
   const cid = await Docker.getContainerIdByName(containerName);
   if (!cid) return [];
