@@ -156,22 +156,17 @@ export class OpencodeService {
   }
 
   private async connectLoop(retryCount = 60, retryDelay = 2000): Promise<void> {
-    console.log("[OpencodeService] connectLoop started");
     if (this.destroyed) {
-      console.log("[OpencodeService] instance destroyed, exiting connectLoop");
       return;
     }
     
     try {
-      console.log(`[OpencodeService] fetching health from http://localhost:${this.port}/global/health`);
       let lastStatus = NaN;
       while (retryCount-- > 0) {
         const res = await fetch(`http://localhost:${this.port}/global/health`);
         if (res.ok) {
           const data = await res.json();
-          console.log(`[OpencodeService] health response:`, data);
           if (data.healthy && this.state === "offline") {
-            console.log("[OpencodeService] healthy and offline, updating state");
             // Force update to recalculate state based on current session statuses
             // if any, otherwise default to idle
             this.updateState(true);
@@ -188,22 +183,15 @@ export class OpencodeService {
     }
 
     try {
-      console.log("[OpencodeService] subscribing to events");
       this.streamAbortController = new AbortController();
       // SDK might not support AbortSignal explicitly in subscribe but we can handle abort manually
       const events = await this.client.event.subscribe();
-      console.log("[OpencodeService] subscribed to events successfully");
       
       for await (const event of events.stream) {
-        if (this.destroyed) {
-          console.log("[OpencodeService] instance destroyed during event stream, breaking");
+        if (this.destroyed)
           break;
-        }
-        if (this.streamAbortController.signal.aborted) {
-          console.log("[OpencodeService] stream aborted, breaking");
+        if (this.streamAbortController.signal.aborted)
           break;
-        }
-        console.log("[OpencodeService] received event:", event.type);
         this.handleEvent(event);
       }
       console.log("[OpencodeService] event stream ended");
