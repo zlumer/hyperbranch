@@ -155,43 +155,67 @@ export class OpencodeService {
     this.setState("offline");
   }
 
-  //AI! print logs on each step inside this function to debug connection issues and state transitions
   private async connectLoop() {
-    if (this.destroyed) return;
+    console.log("[OpencodeService] connectLoop started");
+    if (this.destroyed) {
+      console.log("[OpencodeService] instance destroyed, exiting connectLoop");
+      return;
+    }
     
     try {
+      console.log(`[OpencodeService] fetching health from http://localhost:${this.port}/global/health`);
       const res = await fetch(`http://localhost:${this.port}/global/health`);
       if (res.ok) {
         const data = await res.json();
+        console.log(`[OpencodeService] health response:`, data);
         if (data.healthy && this.state === "offline") {
+          console.log("[OpencodeService] healthy and offline, updating state");
           // Force update to recalculate state based on current session statuses
           // if any, otherwise default to idle
           this.updateState(true);
         }
+      } else {
+        console.log(`[OpencodeService] health check failed with status: ${res.status}`);
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.log(`[OpencodeService] health check fetch failed: ${e.message}`);
       // fetch failed, wait and retry
     }
 
     try {
+      console.log("[OpencodeService] subscribing to events");
       this.streamAbortController = new AbortController();
       // SDK might not support AbortSignal explicitly in subscribe but we can handle abort manually
       const events = await this.client.event.subscribe();
+      console.log("[OpencodeService] subscribed to events successfully");
       
       for await (const event of events.stream) {
-        if (this.destroyed) break;
-        if (this.streamAbortController.signal.aborted) break;
+        if (this.destroyed) {
+          console.log("[OpencodeService] instance destroyed during event stream, breaking");
+          break;
+        }
+        if (this.streamAbortController.signal.aborted) {
+          console.log("[OpencodeService] stream aborted, breaking");
+          break;
+        }
+        console.log("[OpencodeService] received event:", event.type);
         this.handleEvent(event);
       }
-    } catch (e) {
+      console.log("[OpencodeService] event stream ended");
+    } catch (e: any) {
+      console.log(`[OpencodeService] event stream error: ${e.message}`);
       // Event stream closed or failed
     }
 
     if (!this.destroyed) {
+      console.log("[OpencodeService] scheduling reconnect in 2000ms");
       if (this.state !== "error") {
+         console.log("[OpencodeService] setting state to offline before reconnect");
          this.setState("offline");
       }
       this.reconnectTimeout = setTimeout(() => this.connectLoop(), 2000);
+    } else {
+      console.log("[OpencodeService] instance destroyed, not scheduling reconnect");
     }
   }
 
