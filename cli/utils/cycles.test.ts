@@ -1,4 +1,4 @@
-import { assertRejects } from "@std/assert";
+import { expect, describe, it, beforeEach } from "vitest";
 import { detectDependencyCycle, detectParentCycle } from "./cycles.ts";
 import { TaskFile } from "../types.ts";
 
@@ -33,117 +33,57 @@ function clearStore() {
 
 // --- Tests ---
 
-Deno.test({
-  name: "cycles - simple dependency cycle (A->B, adding B->A)",
-  fn: async () => {
+describe("cycles", () => {
+  beforeEach(() => {
     clearStore();
+  });
+
+  it("simple dependency cycle (A->B, adding B->A)", async () => {
     createTask("A", null, ["B"]);
     createTask("B", null, []); // B currently clean
     
-    // Try to make B depend on A
-    await assertRejects(
-      async () => await detectDependencyCycle("B", "A", mockLoadTask),
-      Error,
-      "Circular dependency detected"
-    );
-  }
-});
+    await expect(detectDependencyCycle("B", "A", mockLoadTask))
+      .rejects.toThrow("Circular dependency detected");
+  });
 
-Deno.test({
-  name: "cycles - simple parent cycle (B is parent of A, adding A depends on B)", 
-  fn: async () => {
-    clearStore();
-    // B is parent of A. (So B waits for A).
-    // We try to make A depend on B => A waits for B.
-    // Cycle: A -> B -> A.
+  it("simple parent cycle (B is parent of A, adding A depends on B)", async () => {
     createTask("A", "B", []);
     createTask("B", null, []);
     
-    await assertRejects(
-      async () => await detectDependencyCycle("A", "B", mockLoadTask),
-      Error,
-      "Circular dependency detected"
-    );
-  }
-});
+    await expect(detectDependencyCycle("A", "B", mockLoadTask))
+      .rejects.toThrow("Circular dependency detected");
+  });
 
-Deno.test({
-  name: "cycles - transitive dependency cycle (A->B->C, adding C->A)", 
-  fn: async () => {
-    clearStore();
+  it("transitive dependency cycle (A->B->C, adding C->A)", async () => {
     createTask("A", null, ["B"]);
     createTask("B", null, ["C"]);
     createTask("C", null, []);
 
-    await assertRejects(
-      async () => await detectDependencyCycle("C", "A", mockLoadTask),
-      Error,
-      "Circular dependency detected"
-    );
-  }
-});
+    await expect(detectDependencyCycle("C", "A", mockLoadTask))
+      .rejects.toThrow("Circular dependency detected");
+  });
 
-Deno.test({
-  name: "cycles - parent chain cycle (A child of B, B child of C, adding A depends on C)", 
-  fn: async () => {
-    clearStore();
-    // A child of B => B -> A
-    // B child of C => C -> B
-    // Proposed: A depends on C => A -> C
-    // Cycle: C -> B -> A -> C
-    
+  it("parent chain cycle (A child of B, B child of C, adding A depends on C)", async () => {
     createTask("A", "B", []);
     createTask("B", "C", []);
     createTask("C", null, []);
 
-    await assertRejects(
-      async () => await detectDependencyCycle("A", "C", mockLoadTask),
-      Error,
-      "Circular dependency detected"
-    );
-  }
-});
+    await expect(detectDependencyCycle("A", "C", mockLoadTask))
+      .rejects.toThrow("Circular dependency detected");
+  });
 
-Deno.test({
-  name: "cycles - parent cycle detection (A->B, adding B is child of A)", 
-  fn: async () => {
-    clearStore();
-    // A depends on B => A -> B
-    // Proposed: B child of A => A -> B (wait, parent waits for child).
-    // So A -> B.
-    // This is just a double dependency. A waits for B (dep) and A waits for B (parent).
-    // NO CYCLE.
-    
+  it("parent cycle detection (A->B, adding B is child of A)", async () => {
     createTask("A", null, ["B"]);
     createTask("B", null, []);
 
-    // detectParentCycle(Child=B, Parent=A) checks if A depends on B.
-    // Source=A, Target=B.
-    // Ancestors of A: A.
-    // Dependencies of B: [].
-    // No match.
-    // Should NOT throw.
-    
     await detectParentCycle("B", "A", mockLoadTask);
-  }
-});
+  });
 
-Deno.test({
-  name: "cycles - reverse parent cycle (A->B, adding A is child of B)", 
-  fn: async () => {
-    clearStore();
-    // A depends on B => A -> B.
-    // Proposed: A child of B => B -> A.
-    // Cycle: A -> B -> A.
-    
+  it("reverse parent cycle (A->B, adding A is child of B)", async () => {
     createTask("A", null, ["B"]);
     createTask("B", null, []);
 
-    // detectParentCycle(Child=A, Parent=B)
-    await assertRejects(
-      async () => await detectParentCycle("A", "B", mockLoadTask),
-      Error,
-      "Circular parentage detected"
-    );
-  }
+    await expect(detectParentCycle("A", "B", mockLoadTask))
+      .rejects.toThrow("Circular parentage detected");
+  });
 });

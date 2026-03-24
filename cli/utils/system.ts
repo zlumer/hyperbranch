@@ -1,18 +1,24 @@
-import { exists } from "@std/fs/exists"
-import { join } from "@std/path"
+import { access, mkdir } from "node:fs/promises"
+import { join } from "node:path"
+import { execa } from "execa"
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 // Helper to run shell command and get stdout
 async function runCmd(cmd: string[]): Promise<string> {
-  const command = new Deno.Command(cmd[0], {
-    args: cmd.slice(1),
-    stdout: "piped",
-    stderr: "piped",
-  })
-  const output = await command.output()
-  if (!output.success) {
+  try {
+    const { stdout } = await execa(cmd[0], cmd.slice(1))
+    return stdout.trim()
+  } catch (error: any) {
     throw new Error(`Command failed: ${cmd.join(" ")}`)
   }
-  return new TextDecoder().decode(output.stdout).trim()
 }
 
 export function convertMountsToCmd(mounts: [host: string, container: string][]): string[] {
@@ -20,7 +26,7 @@ export function convertMountsToCmd(mounts: [host: string, container: string][]):
 }
 export async function getPackageCacheMounts(): Promise<[host: string, container: string][]> {
   const mounts: [string, string][] = []
-  const cwd = Deno.cwd()
+  const cwd = process.cwd()
 
   // NPM
   if (await exists(join(cwd, "package-lock.json"))) {
@@ -56,14 +62,14 @@ export async function getPackageCacheMounts(): Promise<[host: string, container:
 }
 
 export async function getAgentConfigMount(): Promise<[host: string, container: string]> {
-  const home = Deno.env.get("HOME")
+  const home = process.env.HOME
   if (!home) {
     throw new Error("HOME environment variable not set")
   }
   const opencodeDir = join(home, ".opencode")
   if (!(await exists(opencodeDir))) {
     // Ensure it exists on host so mount doesn't fail or create root-owned dir
-    await Deno.mkdir(opencodeDir, { recursive: true })
+    await mkdir(opencodeDir, { recursive: true })
   }
   // Read-only mount
   return [opencodeDir, "/root/.opencode:ro"]
@@ -72,7 +78,7 @@ export async function getAgentConfigMount(): Promise<[host: string, container: s
 export function getEnvVars(keys: string[]): Record<string, string> {
   const vars: Record<string, string> = {}
   for (const key of keys) {
-    const val = Deno.env.get(key)
+    const val = process.env[key]
     if (val !== undefined) {
       vars[key] = val
     }
@@ -81,35 +87,25 @@ export function getEnvVars(keys: string[]): Record<string, string> {
 }
 
 export function setupSignalHandler(containerId: string): void {
-  // Deno.addSignalListener is the API for SIGINT
   const handler = async () => {
     console.log("\nReceived SIGINT. Stopping container...")
     try {
-      const cmd = new Deno.Command("docker", {
-        args: ["stop", containerId],
-        stdout: "null",
-        stderr: "null",
-      })
-      await cmd.output()
+      await execa("docker", ["stop", containerId])
       console.log("Container stopped.")
     } catch (e) {
       console.error(`Error stopping container: ${e}`)
     }
-    Deno.exit(130); // Standard SIGINT exit code
+    process.exit(130); // Standard SIGINT exit code
   }
-  Deno.addSignalListener("SIGINT", handler)
+  process.on("SIGINT", handler)
 }
 
 export async function getUserId(): Promise<string> {
-  if (Deno.build.os === "linux") {
+  if (process.platform === "linux") {
     try {
-      const uidProcess = new Deno.Command("id", { args: ["-u"] })
-      const gidProcess = new Deno.Command("id", { args: ["-g"] })
-      const uid = new TextDecoder().decode((await uidProcess.output()).stdout)
-        .trim()
-      const gid = new TextDecoder().decode((await gidProcess.output()).stdout)
-        .trim()
-      return `${uid}:${gid}`
+      const { stdout: uid } = await execa("id", ["-u"])
+      const { stdout: gid } = await execa("id", ["-g"])
+      return `${uid.trim()}:${gid.trim()}`
     } catch {
       console.warn("Failed to detect UID/GID, defaulting to 'node' user.")
     }

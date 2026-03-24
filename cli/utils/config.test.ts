@@ -1,38 +1,41 @@
-import { assertEquals } from "@std/assert"
-import { join } from "@std/path"
-import { ensureDir } from "@std/fs/ensure-dir"
+import { describe, it, expect } from "vitest"
+import { join } from "node:path"
+import { mkdir, writeFile, rm, mkdtemp } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { loadConfig } from "./config.ts"
 
-Deno.test("loadConfig - defaults", async () => {
-	const tempDir = await Deno.makeTempDir();
-	const originalCwd = Deno.cwd();
-	
-	try {
-		Deno.chdir(tempDir);
-		const config = await loadConfig();
-		assertEquals(config.env_vars, []);
-	} finally {
-		Deno.chdir(originalCwd);
-		await Deno.remove(tempDir, { recursive: true });
-	}
-});
+describe("loadConfig", () => {
+  it("defaults", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'test-'));
+    const originalCwd = process.cwd();
+    
+    try {
+      process.chdir(tempDir);
+      const config = await loadConfig();
+      expect(config.env_vars).toEqual([]);
+    } finally {
+      process.chdir(originalCwd);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 
-Deno.test("loadConfig - reads table config", async () => {
-	const tempDir = await Deno.makeTempDir();
-	const originalCwd = Deno.cwd();
-	
-	try {
-		Deno.chdir(tempDir);
-		const hbDir = join(tempDir, ".hyperbranch");
-		await ensureDir(hbDir);
-		await Deno.writeTextFile(join(hbDir, "config.toml"), `
+  it("reads table config", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'test-'));
+    const originalCwd = process.cwd();
+    
+    try {
+      process.chdir(tempDir);
+      const hbDir = join(tempDir, ".hyperbranch");
+      await mkdir(hbDir, { recursive: true });
+      await writeFile(join(hbDir, "config.toml"), `
 env_vars = ["TEST"]
 `);
 
-		const config = await loadConfig();
-		assertEquals(config.env_vars, ["TEST"]);
-	} finally {
-		Deno.chdir(originalCwd);
-		await Deno.remove(tempDir, { recursive: true });
-	}
+      const config = await loadConfig();
+      expect(config.env_vars).toEqual(["TEST"]);
+    } finally {
+      process.chdir(originalCwd);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

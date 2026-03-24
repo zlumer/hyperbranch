@@ -1,86 +1,71 @@
-import { Args } from "@std/cli/parse-args";
 import * as Git from "../utils/git.ts";
 import * as Runs from "../services/runs.ts";
 import { RunId, TaskId } from "../utils/id.ts";
-import { z } from "zod";
-import { parseZodArgs } from "../utils/zod.ts";
+import { command, boolean, restPositionals, string, option } from "cmd-ts";
 
-const LogsArgsSchema = z.object({
-	_: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
-	f: z.boolean().optional(),
-	follow: z.boolean().optional(),
-})
+export const logsCmd = command({
+  name: "logs",
+  description: "View logs for a task run",
+  args: {
+    follow: option({ type: boolean, long: "follow", short: "f", defaultValue: () => false }),
+    args: restPositionals({ type: string, displayName: "args" }),
+  },
+  handler: async ({ follow, args }) => {
+    const taskArg = args[0];
+    const runArg = args[1];
 
-export async function logsCommand(args: Args)
-{
-	const parsedArgs = parseZodArgs(LogsArgsSchema, args);
-	const taskArg = parsedArgs._[1]
-	const runArg = parsedArgs._[2]
-	if (!taskArg)
-	{
-		console.error("Error: Task ID and Run Index are required.");
-		console.error("Usage: hb logs <task-id>/<run-index>");
-		Deno.exit(1);
-	}
+    if (!taskArg) {
+      console.error("Error: Task ID is required.");
+      console.error("Usage: hb logs <task-id>/<run-index>");
+      process.exit(1);
+    }
 
+    const task = TaskId.from(taskArg);
+    let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(taskArg, runArg);
 
-	const task = TaskId.from(taskArg)
-	let run: RunId | null | undefined = RunId.fromTaskIdAndRunIdx(taskArg, runArg)
+    if (!task) {
+      console.error("Error: Task ID is required.");
+      console.error("Usage: hb logs <task-id>/<run-index>");
+      process.exit(1);
+    }
 
-	if (!task)
-	{
-		console.error("Error: Task ID and Run Index are required.");
-		console.error("Usage: hb logs <task-id>/<run-index>");
-		Deno.exit(1);
-	}
+    if (!run) {
+      console.log(`No run index provided. Fetching latest run for task '${task}'...`);
+      run = await Git.getLatestRunBranch(task);
+      if (!run) {
+        console.error(`No runs found for task '${task}'`);
+        process.exit(1);
+      }
+      console.log(`Latest run found: ${run}`);
+    }
 
-	if (!run)
-	{
-		console.log(`No run index provided. Fetching latest run for task '${task}'...`);
-		run = await Git.getLatestRunBranch(task)
-		if (!run)
-		{
-			console.error(`No runs found for task '${task}'`);
-			Deno.exit(1);
-		}
-		console.log(`Latest run found: ${run}`);
-	}
+    try {
+      console.log(`Streaming logs for run ${run} ${follow ? "(follow)" : ""}...`);
 
-	const follow = parsedArgs.f ?? parsedArgs.follow ?? false
+      const logProcess = await Runs.getLogsStream(run, follow);
 
-	try
-	{
-		console.log(`Streaming logs for run ${run} ${follow ? "(follow)" : ""}...`);
+      // Handle signals to exit cleanly
+      process.on("SIGINT", () => {
+        try {
+          if (typeof logProcess.kill === "function") {
+            logProcess.kill();
+          }
+        } catch {
+          // ignore if already dead
+        }
+        process.exit(0);
+      });
 
-		const process = await Runs.getLogsStream(run, follow);
+      const status = await logProcess.status;
 
-		// Handle signals to exit cleanly
-		Deno.addSignalListener("SIGINT", () =>
-		{
-			try
-			{
-				process.kill();
-			} catch
-			{
-				// ignore if already dead
-			}
-			Deno.exit(0);
-		});
+      if (!status.success) {
+        console.error("Log stream exited with non-zero status.");
+        process.exit(status.code);
+      }
 
-		const status = await process.status;
-
-		if (!status.success)
-		{
-			// Docker logs might fail if the container is already removed
-			// But usually it exits with 0 if stream ends.
-			// If it exits with non-zero, it means error (e.g. No such container)
-			console.error("Log stream exited with non-zero status.");
-			Deno.exit(status.code);
-		}
-
-	} catch (e)
-	{
-		console.error(e instanceof Error ? e.message : String(e));
-		Deno.exit(1);
-	}
-}
+    } catch (e) {
+      console.error(e instanceof Error ? e.message : String(e));
+      process.exit(1);
+    }
+  },
+});

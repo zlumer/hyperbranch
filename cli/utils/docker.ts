@@ -1,8 +1,30 @@
-import { dirname, fromFileUrl, join } from "@std/path"
-import { ensureDir } from "@std/fs/ensure-dir"
-import { copy } from "@std/fs/copy"
-import { exists } from "@std/fs/exists"
+import { join, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
+import { copyFile, mkdir, writeFile, chmod, access } from "node:fs/promises"
+import { execa } from "execa"
 import { HYPERBRANCH_DIR } from "./paths.ts"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+async function exists(path: string) {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function copy(src: string, dest: string, options?: { overwrite?: boolean }) {
+  await copyFile(src, dest)
+}
+
+const ASSETS_DIR = join(__dirname, "..", "assets")
+const fromAssets = (filename: string): string => join(ASSETS_DIR, filename)
+
+const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
+  copy(overrideSource ?? fromAssets(filename), join(destDir, filename), { overwrite: true })
 
 export interface DockerConfig {
   image: string
@@ -18,12 +40,6 @@ export interface DockerConfig {
   dockerArgs: string[]
 }
 
-const ASSETS_DIR = join(dirname(fromFileUrl(import.meta.url)), "..", "assets")
-const fromAssets = (filename: string): string => join(ASSETS_DIR, filename)
-
-const copyAssetWithOverride = (filename: string, destDir: string, overrideSource?: string): Promise<void> =>
-  copy(overrideSource ?? fromAssets(filename), join(destDir, filename), { overwrite: true })
-
 export async function prepareRunAssets(
   runDir: string,
   sourcePaths?: {
@@ -33,7 +49,7 @@ export async function prepareRunAssets(
   }
 ) {
   // Ensure run directory exists
-  await ensureDir(runDir)
+  await mkdir(runDir, { recursive: true })
 
   await Promise.all([
     copyAssetWithOverride("docker-compose.yml", runDir, sourcePaths?.dockerCompose),
@@ -42,7 +58,7 @@ export async function prepareRunAssets(
   ])
 
   // Make entrypoint executable
-  await Deno.chmod(join(runDir, "entrypoint.sh"), 0o755)
+  await chmod(join(runDir, "entrypoint.sh"), 0o755)
 }
 
 export async function writeEnvComposeFile(
@@ -52,7 +68,7 @@ export async function writeEnvComposeFile(
   const envContent = Object.entries(env)
     .map(([k, v]) => `${k}=${v}`)
     .join("\n")
-  await Deno.writeTextFile(join(runDir, ".env.compose"), envContent)
+  await writeFile(join(runDir, ".env.compose"), envContent)
 }
 
 export async function scaffoldRunEnvironment(
@@ -83,7 +99,7 @@ export async function scaffoldRunEnvironment(
   if (await exists(envRunPath)) {
     await copy(envRunPath, envDestPath, { overwrite: true });
   } else {
-    await Deno.writeTextFile(envDestPath, "");
+    await writeFile(envDestPath, "");
   }
 }
 
@@ -92,26 +108,21 @@ export async function buildImage(
   tag: string,
 ): Promise<void> {
   console.log(`Building Docker image ${tag} from ${dockerfile}...`)
-  const output = await dcmd(["build", "-f", dockerfile, "-t", tag, dirname(dockerfile)], {
-    stdout: "inherit",
-    stderr: "inherit",
-  })
-  
-  if (!output.success) {
+  try {
+    await execa("docker", ["build", "-f", dockerfile, "-t", tag, dirname(dockerfile)], {
+      stdio: "inherit",
+    })
+  } catch (error) {
     throw new Error("Docker build failed")
   }
 }
 
 export async function getUserId(): Promise<string> {
-  if (Deno.build.os === "linux") {
+  if (process.platform === "linux") {
     try {
-      const uidProcess = new Deno.Command("id", { args: ["-u"] })
-      const gidProcess = new Deno.Command("id", { args: ["-g"] })
-      const uid = new TextDecoder().decode((await uidProcess.output()).stdout)
-        .trim()
-      const gid = new TextDecoder().decode((await gidProcess.output()).stdout)
-        .trim()
-      return `${uid}:${gid}`
+      const { stdout: uid } = await execa("id", ["-u"])
+      const { stdout: gid } = await execa("id", ["-g"])
+      return `${uid.trim()}:${gid.trim()}`
     } catch {
       console.warn("Failed to detect UID/GID, defaulting to 'node' user.")
     }
@@ -119,16 +130,10 @@ export async function getUserId(): Promise<string> {
   return "node"
 }
 
-
 export async function getContainerIdByName(name: string): Promise<string | null> {
   try {
-    const output = await dcmd(["inspect", "--format", "{{.Id}}", name], {
-        stdout: "piped",
-        stderr: "null",
-    })
-    if (!output.success) return null
-    
-    return new TextDecoder().decode(output.stdout).trim()
+    const { stdout } = await dcmd(["inspect", "--format", "{{.Id}}", name])
+    return stdout.trim()
   } catch {
     return null
   }
@@ -136,13 +141,8 @@ export async function getContainerIdByName(name: string): Promise<string | null>
 
 export async function getContainerStatus(cid: string): Promise<{ status: string; startedAt: string; exitCode: number | null }> {
   try {
-    const output = await dcmd(["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}}", cid], {
-        stdout: "piped",
-        stderr: "null",
-    })
-    if (!output.success) return { status: "unknown", startedAt: "", exitCode: null }
-    
-    const text = new TextDecoder().decode(output.stdout).trim()
+    const { stdout } = await dcmd(["inspect", "--format", "{{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}}", cid])
+    const text = stdout.trim()
     const [status, startedAt, exitCodeStr] = text.split("|")
     const exitCode = exitCodeStr ? parseInt(exitCodeStr, 10) : null
     return { status, startedAt, exitCode: isNaN(exitCode as number) ? null : exitCode }
@@ -154,13 +154,13 @@ export async function getContainerStatus(cid: string): Promise<{ status: string;
 export async function removeContainer(cid: string, force = false): Promise<void> {
   const args = ["rm", cid]
   if (force) args.splice(1, 0, "-f")
-  await dcmd(args, { stdout: "null", stderr: "null" })
+  try { await dcmd(args) } catch {}
 }
 
 export async function containerExists(nameOrId: string): Promise<boolean> {
   try {
-    const output = await dcmd(["inspect", "--format", "{{.Id}}", nameOrId], { stdout: "null", stderr: "null" })
-    return output.success
+    await dcmd(["inspect", "--format", "{{.Id}}", nameOrId])
+    return true
   } catch {
     return false
   }
@@ -168,9 +168,8 @@ export async function containerExists(nameOrId: string): Promise<boolean> {
 
 export async function findContainersByPartialName(nameFragment: string): Promise<string[]> {
   try {
-    const output = await dcmd(["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"], { stdout: "piped", stderr: "null" })
-    if (!output.success) return []
-    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean)
+    const { stdout } = await dcmd(["ps", "-a", "--filter", `name=${nameFragment}`, "--format", "{{.Names}}"])
+    return stdout.trim().split("\n").filter(Boolean)
   } catch {
     return []
   }
@@ -178,72 +177,70 @@ export async function findContainersByPartialName(nameFragment: string): Promise
 
 export async function findNetworksByPartialName(nameFragment: string): Promise<string[]> {
   try {
-    const output = await dcmd(["network", "ls", "--filter", `name=${nameFragment}`, "--format", "{{.Name}}"], { stdout: "piped", stderr: "null" })
-    if (!output.success) return []
-    return new TextDecoder().decode(output.stdout).trim().split("\n").filter(Boolean)
+    const { stdout } = await dcmd(["network", "ls", "--filter", `name=${nameFragment}`, "--format", "{{.Name}}"])
+    return stdout.trim().split("\n").filter(Boolean)
   } catch {
     return []
   }
 }
 
 export async function removeNetwork(name: string): Promise<void> {
-  await dcmd(["network", "rm", name], { stdout: "null", stderr: "null" })
+  try { await dcmd(["network", "rm", name]) } catch {}
 }
 
 export async function removeImage(tag: string, force = false): Promise<void> {
   const args = ["rmi", tag]
   if (force) args.splice(1, 0, "-f")
-  await dcmd(args, { stdout: "null", stderr: "null" })
+  try { await dcmd(args) } catch {}
 }
 
 // Helpers
+export const dockerCmd = (args: string[], opts: { cwd?: string, stdio?: "pipe" | "inherit" | "ignore", env?: Record<string, string> } = {}) => {
+  return execa("docker", args, {
+    cwd: opts.cwd,
+    stdio: opts.stdio || "pipe",
+    env: opts.env as any
+  })
+}
 
-type StdoutError = "piped" | "inherit" | "null" | undefined
-
-export const dockerCmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) =>
-  new Deno.Command("docker", {
-        args,
-        cwd: opts.cwd,
-        stdout: opts.stdout,
-        stderr: opts.stderr,
-        env: opts.env
-    })
-
-const dcmd = (args: string[], opts: { cwd?: string, stdout?: StdoutError, stderr?: StdoutError, env?: Record<string, string> } = {}) => 
-    dockerCmd(args, opts).output()
+const dcmd = (args: string[], opts: { cwd?: string, stdio?: "pipe" | "inherit" | "ignore", env?: Record<string, string> } = {}) => 
+  dockerCmd(args, opts)
 
 export async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
-  const output = await dcmd(["port", cid, internalPort.toString()], { stdout: "piped", stderr: "null" })
-  if (!output.success) return null
+  try {
+    const { stdout } = await dcmd(["port", cid, internalPort.toString()])
+    const text = stdout.trim()
+    if (!text) return null
 
-  const text = new TextDecoder().decode(output.stdout).trim()
-  if (!text) return null
-
-  // Format: 80/tcp -> 0.0.0.0:32768
-  const firstLine = text.split("\n")[0]
-  const parts = firstLine.split(":")
-  const portStr = parts[parts.length - 1]
-  const port = parseInt(portStr, 10)
-  return isNaN(port) ? null : port
+    const firstLine = text.split("\n")[0]
+    const parts = firstLine.split(":")
+    const portStr = parts[parts.length - 1]
+    const port = parseInt(portStr, 10)
+    return isNaN(port) ? null : port
+  } catch {
+    return null
+  }
 }
 
 export async function getContainerLogs(cid: string): Promise<string> {
-  const output = await dcmd(["logs", cid], { stdout: "piped", stderr: "piped" })
-  const stdout = new TextDecoder().decode(output.stdout)
-  const stderr = new TextDecoder().decode(output.stderr)
-  return stdout + stderr
+  try {
+    const { stdout, stderr } = await dcmd(["logs", cid], { stdio: "pipe" } as any)
+    return stdout + stderr
+  } catch (error: any) {
+    return (error.stdout || "") + (error.stderr || "")
+  }
 }
 
 export function stopContainer(cid: string) {
-  return dcmd(["stop", cid], { stdout: "null", stderr: "inherit" })
+  return dcmd(["stop", cid])
 }
 
 export function pauseContainer(cid: string) {
-  return dcmd(["pause", cid], { stdout: "null", stderr: "inherit" })
+  return dcmd(["pause", cid])
 }
 
 export function unpauseContainer(cid: string) {
-  return dcmd(["unpause", cid], { stdout: "null", stderr: "inherit" })
+  return dcmd(["unpause", cid])
 }
 
 export async function execContainer(cid: string, cmd: string[], options?: { workdir?: string }): Promise<void> {
@@ -253,14 +250,14 @@ export async function execContainer(cid: string, cmd: string[], options?: { work
   }
   args.push(cid, ...cmd)
   
-  const output = await dcmd(args, { stdout: "piped", stderr: "piped" })
-  if (!output.success) {
-    const stderr = new TextDecoder().decode(output.stderr).trim()
+  try {
+    await dcmd(args, { stdio: "pipe" })
+  } catch (error: any) {
+    const stderr = error.stderr || error.message
     throw new Error(`Docker exec failed: ${stderr}`)
   }
 }
 
-// Class wrapper for compatibility and convenience
 export class DockerContainerProcess {
   constructor(public cid: string) {}
   
@@ -274,31 +271,11 @@ export class DockerContainerProcess {
     return new DockerContainerProcess(cid)
   }
 
-  stop() {
-    return stopContainer(this.cid)
-  }
-  
-  pause() {
-    return pauseContainer(this.cid)
-  }
-  
-  unpause() {
-    return unpauseContainer(this.cid)
-  }
-  
-  rm(force: boolean = false) {
-    return removeContainer(this.cid, force)
-  }
-  
-  getContainerPort(internalPort: number) {
-    return getContainerPort(this.cid, internalPort)
-  }
-  
-  getContainerStatus() {
-    return getContainerStatus(this.cid)
-  }
-  
-  getContainerLogs() {
-    return getContainerLogs(this.cid)
-  }
+  stop() { return stopContainer(this.cid) }
+  pause() { return pauseContainer(this.cid) }
+  unpause() { return unpauseContainer(this.cid) }
+  rm(force: boolean = false) { return removeContainer(this.cid, force) }
+  getContainerPort(internalPort: number) { return getContainerPort(this.cid, internalPort) }
+  getContainerStatus() { return getContainerStatus(this.cid) }
+  getContainerLogs() { return getContainerLogs(this.cid) }
 }

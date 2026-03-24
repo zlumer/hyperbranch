@@ -1,4 +1,5 @@
-import { exists } from "@std/fs/exists";
+import fs from "node:fs";
+const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Lifecycle from "../runtime/lifecycle.ts";
@@ -129,8 +130,8 @@ async function findRunsByClones(task: TaskId): Promise<RunId[]> {
   if (!(await exists(runsDir))) return [];
   const runs: RunId[] = [];
   const slugPrefix = task.toDirectorySlug() + "-";
-  for await (const entry of Deno.readDir(runsDir)) {
-    if (entry.isDirectory && entry.name.startsWith(slugPrefix)) {
+  for (const entry of await fs.promises.readdir(runsDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name.startsWith(slugPrefix)) {
       const runId = RunId.fromString(entry.name);
       if (runId && runId.task.id === task.id) {
         runs.push(runId);
@@ -317,7 +318,7 @@ export const _deps = {
 };
 
 // Logs helper for server/CLI
-export async function getLogsStream(run: RunId, follow: boolean): Promise<Deno.ChildProcess> {
+export async function getLogsStream(run: RunId, follow: boolean): Promise<any> {
   const ctx = getRunContext(run);
   return Lifecycle.logs(ctx, follow);
 }

@@ -1,4 +1,5 @@
-import { join } from "@std/path"
+import { join } from "node:path"
+import { readdir } from "node:fs/promises"
 import { TASKS_DIR } from "./paths.ts"
 import { TaskId } from "./id.ts";
 
@@ -24,8 +25,9 @@ export async function scanTasks(): Promise<TaskId[]> {
 	const taskIds: TaskId[] = []
 
 	try {
-		for await (const entry of Deno.readDir(tasksDir)) {
-			if (entry.isFile && entry.name.startsWith("task-") && entry.name.endsWith(".md")) {
+		const entries = await readdir(tasksDir, { withFileTypes: true })
+		for (const entry of entries) {
+			if (entry.isFile() && entry.name.startsWith("task-") && entry.name.endsWith(".md")) {
 				// Extract ID: task-<id>.md
 				const id = TaskId.from(entry.name.slice(5, -3))
 				if (id) {
@@ -33,8 +35,8 @@ export async function scanTasks(): Promise<TaskId[]> {
 				}
 			}
 		}
-	} catch (e) {
-		if (!(e instanceof Deno.errors.NotFound)) {
+	} catch (e: any) {
+		if (e.code !== "ENOENT") {
 			throw e
 		}
 	}

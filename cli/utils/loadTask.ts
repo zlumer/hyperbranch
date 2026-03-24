@@ -1,8 +1,16 @@
-import { exists } from "@std/fs/exists"
-import { stringify as stringifyYaml } from "@std/yaml"
-import { parse as parseYaml } from "@std/yaml/parse"
+import { access, readFile, writeFile } from "node:fs/promises"
+import { stringify as stringifyYaml, parse as parseYaml } from "yaml"
 import { TaskFile, TaskFrontmatter } from "../types.ts"
 import { getTaskPath } from "./tasks.ts"
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export async function loadTask(id: string): Promise<TaskFile>
 {
@@ -12,7 +20,7 @@ export async function loadTask(id: string): Promise<TaskFile>
 		throw new Error(`Task ${id} not found at ${path}`)
 	}
 
-	const content = await Deno.readTextFile(path)
+	const content = await readFile(path, "utf-8")
 
 	// Robust frontmatter extraction
 	const match = content.match(/^---\n([\s\S]+?)\n---\n([\s\S]*)$/)
@@ -40,7 +48,7 @@ export async function saveTask(task: TaskFile)
 {
 	const yaml = stringifyYaml(task.frontmatter)
 	const content = `---\n${yaml}---\n${task.body}`
-	await Deno.writeTextFile(task.path, content)
+	await writeFile(task.path, content)
 }
 
 export async function checkTaskExists(id: string): Promise<boolean>

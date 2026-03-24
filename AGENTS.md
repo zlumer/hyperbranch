@@ -27,5 +27,5 @@ Don't add useless dependencies or complexity. Take the line count low.
 ```bash
 # running tests
 cd cli
-deno test -A
+npm run test
 ```

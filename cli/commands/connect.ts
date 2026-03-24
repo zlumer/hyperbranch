@@ -1,101 +1,83 @@
-import { Args } from "@std/cli/parse-args"
-import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts"
-import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts"
+import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts";
+import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts";
 import { TaskId } from "../utils/id.ts";
-import { z } from "zod";
-import { parseZodArgs } from "../utils/zod.ts";
+import { command, string, option, positional } from "cmd-ts";
 
-const ConnectArgsSchema = z.object({
-	_: z.array(z.union([z.string(), z.number()])),
-	"depends-on": z.string().optional(),
-	"child-of": z.string().optional(),
-})
+export const connectCmd = command({
+  name: "connect",
+  description: "Connect a task to a parent or dependency",
+  args: {
+    dependsOnRaw: option({ type: string, long: "depends-on", defaultValue: () => "" }),
+    childOfRaw: option({ type: string, long: "child-of", defaultValue: () => "" }),
+    taskIdRaw: positional({ type: string, displayName: "task-id" }),
+  },
+  handler: async ({ dependsOnRaw, childOfRaw, taskIdRaw }) => {
+    const taskId = taskIdRaw ? TaskId.from(taskIdRaw) : undefined;
+    const dependsOn = dependsOnRaw ? TaskId.from(dependsOnRaw) : undefined;
+    const childOf = childOfRaw ? TaskId.from(childOfRaw) : undefined;
 
-export async function connectCommand(rawArgs: Args)
-{
-	const args = parseZodArgs(ConnectArgsSchema, rawArgs);
-	const targetArg = args._[1] ? String(args._[1]) : undefined;
-	const taskId = targetArg ? TaskId.from(targetArg) : undefined;
-	const dependsOnRaw = args["depends-on"]
-	const childOfRaw = args["child-of"]
+    if (!taskId) {
+      console.error("Error: Target task ID is required.");
+      console.error("Usage: hb connect [--depends-on <id>] [--child-of <id>] <task-id>");
+      process.exit(1);
+    }
 
-	const dependsOn = dependsOnRaw ? TaskId.from(dependsOnRaw) : undefined
-	const childOf = childOfRaw ? TaskId.from(childOfRaw) : undefined
+    if (!dependsOn && !childOf) {
+      console.error("Error: Must specify either --depends-on or --child-of.");
+      process.exit(1);
+    }
 
-	if (!taskId)
-	{
-		console.error("Error: Target task ID is required.")
-		console.error("Usage: ./hb.ts connect [--depends-on <id>] [--child-of <id>] <task-id>")
-		Deno.exit(1)
-	}
+    const task = await loadTask(taskId.id);
+    let updated = false;
 
-	if (!dependsOn && !childOf)
-	{
-		console.error("Error: Must specify either --depends-on or --child-of.")
-		Deno.exit(1)
-	}
+    if (dependsOn) {
+      if (!(await checkTaskExists(dependsOn.id))) {
+        console.error(`Error: Dependency task ${dependsOn} does not exist.`);
+        process.exit(1);
+      }
 
-	const task = await loadTask(taskId.id)
-	let updated = false
+      // Check cycle
+      try {
+        await detectDependencyCycle(taskId.id, dependsOn.id);
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
 
-	if (dependsOn)
-	{
-		if (!(await checkTaskExists(dependsOn.id)))
-		{
-			console.error(`Error: Dependency task ${dependsOn} does not exist.`)
-			Deno.exit(1)
-		}
+      if (!task.frontmatter.dependencies.includes(dependsOn.id)) {
+        task.frontmatter.dependencies.push(dependsOn.id);
+        updated = true;
+        console.log(`Added dependency: ${dependsOn}`);
+      } else {
+        console.log(`Dependency ${dependsOn} already exists.`);
+      }
+    }
 
-		// Check cycle
-		try {
-			await detectDependencyCycle(taskId.id, dependsOn.id)
-		} catch (e) {
-			console.error(e instanceof Error ? e.message : String(e))
-			Deno.exit(1)
-		}
+    if (childOf) {
+      if (!(await checkTaskExists(childOf.id))) {
+        console.error(`Error: Parent task ${childOf} does not exist.`);
+        process.exit(1);
+      }
 
-		if (!task.frontmatter.dependencies.includes(dependsOn.id))
-		{
-			task.frontmatter.dependencies.push(dependsOn.id)
-			updated = true
-			console.log(`Added dependency: ${dependsOn}`)
-		}
-		else
-		{
-			console.log(`Dependency ${dependsOn} already exists.`)
-		}
-	}
+      // Check cycle
+      try {
+        await detectParentCycle(taskId.id, childOf.id);
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
 
-	if (childOf)
-	{
-		if (!(await checkTaskExists(childOf.id)))
-		{
-			console.error(`Error: Parent task ${childOf} does not exist.`)
-			Deno.exit(1)
-		}
+      if (task.frontmatter.parent !== childOf.id) {
+        task.frontmatter.parent = childOf.id;
+        updated = true;
+        console.log(`Set parent: ${childOf}`);
+      } else {
+        console.log(`Parent is already ${childOf}`);
+      }
+    }
 
-		// Check cycle
-		try {
-			await detectParentCycle(taskId.id, childOf.id)
-		} catch (e) {
-			console.error(e instanceof Error ? e.message : String(e))
-			Deno.exit(1)
-		}
-
-		if (task.frontmatter.parent !== childOf.id)
-		{
-			task.frontmatter.parent = childOf.id
-			updated = true
-			console.log(`Set parent: ${childOf}`)
-		}
-		else
-		{
-			console.log(`Parent is already ${childOf}`)
-		}
-	}
-
-	if (updated)
-	{
-		await saveTask(task)
-	}
-}
+    if (updated) {
+      await saveTask(task);
+    }
+  },
+});

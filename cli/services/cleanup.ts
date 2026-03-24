@@ -1,5 +1,6 @@
-import { join } from "@std/path";
-import { exists } from "@std/fs/exists";
+import { join } from "node:path";
+import fs from "node:fs";
+const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Docker from "../utils/docker.ts";
@@ -16,8 +17,8 @@ export async function sweep() {
 
   console.log("Sweeping runs...");
 
-  for await (const entry of Deno.readDir(runsDir)) {
-    if (!entry.isDirectory) continue;
+  for (const entry of await fs.promises.readdir(runsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
     
     // Expect hb-<taskId>-<runIndex>
     const match = entry.name.match(/^(hb|task)-(.+)-(\d+)$/);
@@ -69,8 +70,8 @@ export async function deepSweep() {
   const runsDir = RUNS_DIR();
   
   if (await exists(runsDir)) {
-    for await (const entry of Deno.readDir(runsDir)) {
-      if (!entry.isDirectory) continue;
+    for (const entry of await fs.promises.readdir(runsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
       // We accept any directory starting with hb- as a valid project to preserve
       if (entry.name.startsWith("hb-")) {
         activeProjects.add(entry.name);
@@ -123,8 +124,8 @@ export async function listCandidates() {
   console.log("Candidates for removal (sweep):");
   let found = false;
 
-  for await (const entry of Deno.readDir(runsDir)) {
-    if (!entry.isDirectory)
+  for (const entry of await fs.promises.readdir(runsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory())
       continue
 
     const candidate = await checkDir(entry.name, runsDir)

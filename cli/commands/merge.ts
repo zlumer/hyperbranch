@@ -1,37 +1,36 @@
 import * as Runs from "../services/runs.ts";
 import { RunId } from "../utils/id.ts";
-import { z } from "zod"
-import { parseZodArgs } from "../utils/zod.ts";
-import { Args } from "@std/cli/parse-args";
+import { command, boolean, string, option, restPositionals } from "cmd-ts";
 
-const MergeArgsSchema = z.object({
-  _: z.array(z.union([z.string(), z.number()])).transform((arr) => arr.map(String)),
-  strategy: z.enum(["merge", "squash", "ff"]).optional().default("ff"),
-  cleanup: z.union([z.boolean(), z.string().transform(v => v === "true")]).optional().default(false),
-})
+export const mergeCmd = command({
+  name: "merge",
+  description: "Merge a task run",
+  args: {
+    strategy: option({ type: string, long: "strategy", defaultValue: () => "ff" }),
+    cleanup: option({ type: boolean, long: "cleanup", defaultValue: () => false }),
+    args: restPositionals({ type: string, displayName: "args" }),
+  },
+  handler: async ({ strategy, cleanup, args }) => {
+    const runId = RunId.fromTaskIdAndRunIdx(args[0], args[1]);
 
-export async function mergeCommand(rawArgs: Args) {
-  const args = parseZodArgs(MergeArgsSchema, rawArgs);
-  const runId = RunId.fromTaskIdAndRunIdx(args._[1] as string, args._[2] as string);
-
-  if (!runId) {
-    console.error("Error: Task ID and Run Index are required.");
-    console.error("Usage: hb merge <task-id>/<run-index> [--strategy <merge|squash|ff>] [--cleanup]");
-    Deno.exit(1);
-  }
-
-  const strategy = args.strategy as "merge" | "squash" | "ff";
-  const cleanup = args.cleanup as boolean;
-
-  try {
-    console.log(`Merging run ${runId} using strategy '${strategy}'...`);
-    const { cleanupSkipped } = await Runs.mergeRun(runId, strategy, cleanup);
-    console.log("✅ Merge successful.");
-    if (cleanupSkipped) {
-      console.log("⚠️ Cleanup skipped: Run has uncommitted changes.");
+    if (!runId) {
+      console.error("Error: Task ID and Run Index are required.");
+      console.error("Usage: hb merge <task-id>/<run-index> [--strategy <merge|squash|ff>] [--cleanup]");
+      process.exit(1);
     }
-  } catch (error: any) {
-    console.error(`❌ Merge failed: ${error.message}`);
-    Deno.exit(1);
-  }
-}
+
+    const strat = strategy as "merge" | "squash" | "ff";
+
+    try {
+      console.log(`Merging run ${runId} using strategy '${strat}'...`);
+      const { cleanupSkipped } = await Runs.mergeRun(runId, strat, cleanup);
+      console.log("✅ Merge successful.");
+      if (cleanupSkipped) {
+        console.log("⚠️ Cleanup skipped: Run has uncommitted changes.");
+      }
+    } catch (error: any) {
+      console.error(`❌ Merge failed: ${error.message}`);
+      process.exit(1);
+    }
+  },
+});

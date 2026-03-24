@@ -1,25 +1,24 @@
-
-import { Args } from "@std/cli/parse-args";
 import app, { ensureApiKey } from "../server/main.ts";
-import { z } from "zod";
-import { parseZodArgs } from "../utils/zod.ts";
+import { command, string, option } from "cmd-ts";
+import { serve } from "@hono/node-server";
 
-const ServerArgsSchema = z.object({
-  port: z.union([z.string(), z.number()]).optional(),
-  p: z.union([z.string(), z.number()]).optional(),
-})
+export const serverCmd = command({
+  name: "server",
+  description: "Start the server",
+  args: {
+    portOpt: option({ type: string, long: "port", short: "p", defaultValue: () => "" }),
+  },
+  handler: async ({ portOpt }) => {
+    const portArg = portOpt || process.env.PORT || "8000";
+    const port = parseInt(String(portArg), 10);
 
-export function serverCommand(rawArgs: Args) {
-  const args = parseZodArgs(ServerArgsSchema, rawArgs);
-  const portArg = args.port || args.p || Deno.env.get("PORT") || "8000";
-  const port = parseInt(String(portArg), 10);
+    if (isNaN(port)) {
+      console.error(`Invalid port: ${portArg}`);
+      process.exit(1);
+    }
 
-  if (isNaN(port)) {
-    console.error(`Invalid port: ${portArg}`);
-    Deno.exit(1);
+    ensureApiKey();
+    console.log(`Server starting on http://localhost:${port}`);
+    serve({ fetch: app.fetch, port });
   }
-
-  ensureApiKey();
-  console.log(`Server starting on http://localhost:${port}`);
-  Deno.serve({ port }, app.fetch);
-}
+});

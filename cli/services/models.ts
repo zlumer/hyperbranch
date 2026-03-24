@@ -2,7 +2,8 @@ import { TaskId } from "../utils/id.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
-import { join } from "@std/path";
+import { join } from "node:path";
+import { execa } from "execa";
 import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
 
 let cachedModels: string[] | null = null;
@@ -35,24 +36,17 @@ async function fetchModelsFromContainer(containerName: string): Promise<string[]
   const cid = await Docker.getContainerIdByName(containerName);
   if (!cid) return [];
 
-  const cmd = new Deno.Command("docker", {
-    args: [
-      "exec",
-      cid,
-      "npx", "-y", "opencode-ai", "models"
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  });
-
-  const { code, stdout, stderr } = await cmd.output();
+  const { exitCode, stdout, stderr } = await execa("docker", [
+    "exec",
+    cid,
+    "npx", "-y", "opencode-ai", "models"
+  ], { reject: false });
   
-  if (code !== 0) {
-    const errText = new TextDecoder().decode(stderr);
-    throw new Error(`Failed to fetch models from container ${containerName}: ${errText}`);
+  if (exitCode !== 0) {
+    throw new Error(`Failed to fetch models from container ${containerName}: ${stderr}`);
   }
 
-  const outputText = new TextDecoder().decode(stdout);
+  const outputText = stdout;
   
   const models = outputText
     .split("\n")
@@ -91,30 +85,22 @@ async function fetchModels(taskId: TaskId): Promise<string[]> {
     // Using a blank entrypoint to bypass the default opencode server startup
     const composeFile = join(clonePath, "docker-compose.yml");
     
-    // Using Deno.Command directly instead of Docker utils because we need to capture stdout
-    const cmd = new Deno.Command("docker", {
-      args: [
-        "compose",
-        "-f", composeFile,
-        "run",
-        "--rm",
-        "--entrypoint", "",
-        "task",
-        "npx", "-y", "opencode-ai", "models"
-      ],
-      cwd: clonePath,
-      stdout: "piped",
-      stderr: "piped",
-    });
-
-    const { code, stdout, stderr } = await cmd.output();
+    // Using execa directly instead of Docker utils because we need to capture stdout
+    const { exitCode, stdout, stderr } = await execa("docker", [
+      "compose",
+      "-f", composeFile,
+      "run",
+      "--rm",
+      "--entrypoint", "",
+      "task",
+      "npx", "-y", "opencode-ai", "models"
+    ], { cwd: clonePath, reject: false });
     
-    if (code !== 0) {
-      const errText = new TextDecoder().decode(stderr);
-      throw new Error(`Failed to fetch models: ${errText}`);
+    if (exitCode !== 0) {
+      throw new Error(`Failed to fetch models: ${stderr}`);
     }
 
-    const outputText = new TextDecoder().decode(stdout);
+    const outputText = stdout;
     
     // Parse stdout: expect one model per line, e.g., "google/gemini-2.5-flash"
     const models = outputText

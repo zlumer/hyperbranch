@@ -1,12 +1,12 @@
-import { join } from "@std/path";
+import { join } from "node:path";
 
 export const HYPERBRANCH_DIR = ".hyperbranch";
 export const RUNS_DIR_NAME = ".runs";
 export const TASKS_DIR_NAME = "tasks";
 
 // Absolute paths for file system operations
-export const RUNS_DIR = (cwd = Deno.cwd()) => Deno.env.get("HB_RUNS_DIR") || join(cwd, HYPERBRANCH_DIR, RUNS_DIR_NAME);
-export const TASKS_DIR = (cwd = Deno.cwd()) => Deno.env.get("HB_TASKS_DIR") || join(cwd, HYPERBRANCH_DIR, TASKS_DIR_NAME);
+export const RUNS_DIR = (cwd = process.cwd()) => process.env.HB_RUNS_DIR || join(cwd, HYPERBRANCH_DIR, RUNS_DIR_NAME);
+export const TASKS_DIR = (cwd = process.cwd()) => process.env.HB_TASKS_DIR || join(cwd, HYPERBRANCH_DIR, TASKS_DIR_NAME);
 
 // Git paths (forward slash, relative) for filtering ls-files
 export const GIT_RUNS_PATH = `${HYPERBRANCH_DIR}/${RUNS_DIR_NAME}`;

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { serve } from "@hono/node-server";
 import { authMiddleware } from "./middleware/auth.ts";
 import { errorHandler } from "./middleware/errorHandler.ts";
 import { corsMiddleware } from "./middleware/cors.ts";
@@ -9,9 +10,9 @@ import { ORPCError } from "@orpc/server";
 
 // Generate API key if not set
 export function ensureApiKey() {
-  if (!Deno.env.get("HB_API_KEY")) {
+  if (!process.env.HB_API_KEY) {
     const key = crypto.randomUUID();
-    Deno.env.set("HB_API_KEY", key);
+    process.env.HB_API_KEY = key;
     console.log(`Generated HB_API_KEY: ${key}`);
     console.log("Set this in your client or environment to authenticate.");
   } else {
@@ -69,13 +70,13 @@ app.all("/tasks/*", async (c) => {
 });
 
 // Start Server
-const port = parseInt(Deno.env.get("PORT") || "8000");
+const port = parseInt(process.env.PORT || "8000");
 
 // Check if we are being run directly
-if (import.meta.main) {
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.main) {
   ensureApiKey();
   console.log(`Server starting on http://localhost:${port}`);
-  Deno.serve({ port }, app.fetch);
+  serve({ fetch: app.fetch, port });
 }
 
 export default app;
