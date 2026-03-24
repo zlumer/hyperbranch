@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env -S npx tsx
 import fs from "node:fs/promises";
 import { TASKS_DIR } from "./utils/paths.ts";
 import { subcommands, run } from "cmd-ts";
