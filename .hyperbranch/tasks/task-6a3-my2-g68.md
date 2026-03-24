@@ -1,6 +1,6 @@
 ---
 id: 6a3-my2-g68
-status: plan
+status: todo
 parent: null
 dependencies: []
 ---

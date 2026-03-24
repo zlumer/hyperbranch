@@ -2,7 +2,7 @@
 _chats
 .hyperbranch/.env
 .hyperbranch/.env.*
-.hyperbranch/.worktrees
+.hyperbranch/.runs
 .hyperbranch/.current-run
 node_modules
 .hyperbranch/opencode.jsonc
