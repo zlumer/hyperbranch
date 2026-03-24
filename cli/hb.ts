@@ -14,6 +14,7 @@ import { serverCommand } from "./commands/server.ts"
 import { portCommand } from "./commands/port.ts"
 import { mergeCommand } from "./commands/merge.ts"
 import { syncCommand } from "./commands/sync.ts"
+import { initCommand } from "./commands/init.ts"
 
 // --- File I/O ---
 
@@ -26,14 +27,16 @@ async function ensureRepo()
 
 async function main()
 {
-	await ensureRepo()
-
 	const args = parseArgs(Deno.args, {
 		boolean: ["edit", "sweep", "force", "f", "follow", "cleanup"],
 		string: ["parent", "depends-on", "child-of", "from-status", "strategy"],
 	})
 
 	const command = args._[0]
+
+	if (command !== "init") {
+		await ensureRepo()
+	}
 
 	switch (command)
 	{
@@ -62,6 +65,7 @@ async function main()
 			await rmCommand(args)
 			break
 		case "server":
+		case "web":
 			await serverCommand(args)
 			break
 		case "port":
@@ -73,9 +77,13 @@ async function main()
 		case "sync":
 			await syncCommand(args)
 			break
+		case "init":
+			await initCommand()
+			break
 		default:
 			console.log("Hyperbranch CLI Scaffolding")
 			console.log("Commands:")
+			console.log("  init")
 			console.log("  create [--parent <id>] [--edit] <title>")
 			console.log("  connect [--depends-on <id>] [--child-of <id>] <task-id>")
 			console.log("  move [--from-status <old>] <task-id> <new-status>")
@@ -84,7 +92,7 @@ async function main()
 			console.log("  stop <task-id>")
 			console.log("  rm <task-id>/<run-id>... | <task-id>... | --sweep")
 			console.log("  ps")
-			console.log("  server [--port <port>]")
+			console.log("  server [--port <port>] (alias: web)")
 			console.log("  port <run-id> <port>")
 			console.log("  merge <task-id> <run-index> [--strategy <merge|squash|rebase>] [--cleanup]")
 			console.log("  sync <task-id>/<run-index>")
