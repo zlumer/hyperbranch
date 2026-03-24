@@ -1,13 +1,12 @@
-import { assert, assertEquals, assertRejects } from "@std/assert";
-import { stub } from "@std/testing/mock";
-import { join } from "@std/path";
-import { ensureDir } from "@std/fs";
-import { parseArgs } from "@std/cli/parse-args";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { execa } from "execa";
+import { join } from "node:path";
+import fs from "node:fs/promises";
+import os from "node:os";
 
-import { getRunDir } from "../utils/paths.ts";
-import { rmCommand } from "./rm.ts";
+import { rmCmd } from "./rm.ts";
 
-// --- Mock Setup ---
+vi.mock("execa");
 
 function mockCmd(
   outputs: Record<
@@ -15,17 +14,16 @@ function mockCmd(
     { stdout?: string; stderr?: string; success: boolean; code?: number }
   >,
 ) {
-  return stub(Deno, "Command", (cmd: unknown, options?: unknown) => {
-    const commandName = cmd as string | URL;
-    const opts = options as Deno.CommandOptions;
+  return vi.mocked(execa).mockImplementation((cmd: string, args?: readonly string[], options?: any) => {
+    const commandName = cmd;
 
     if (commandName !== "git" && commandName !== "docker") {
       throw new Error(`Unexpected command: ${commandName}`);
     }
 
-    const args = opts?.args || [];
-    const cwd = opts?.cwd;
-    const commandStr = `${commandName} ${args.join(" ")}`;
+    const argsArr = args || [];
+    const cwd = options?.cwd;
+    const commandStr = `${commandName} ${argsArr.join(" ")}`;
 
     // 1. Try match with CWD prefix: "[cwd] command"
     let result = cwd ? outputs[`[${cwd}] ${commandStr}`] : undefined;
@@ -43,53 +41,56 @@ function mockCmd(
 
     if (!result) {
       console.log(`[MockCmd] Unmocked: ${commandStr}`);
-      return {
-        output: () =>
-          Promise.resolve({
-            success: false,
-            code: 1,
-            stdout: new Uint8Array(),
-            stderr: new TextEncoder().encode(`Unmocked: ${commandStr}`),
-          }),
-      } as unknown as Deno.Command;
+      return Promise.resolve({
+        failed: true,
+        exitCode: 1,
+        stdout: "",
+        stderr: `Unmocked: ${commandStr}`,
+        isCanceled: false,
+        isTerminated: false,
+        command: commandStr,
+        escapedCommand: commandStr
+      }) as any;
     }
 
-    return {
-      output: () =>
-        Promise.resolve({
-          success: result.success,
-          code: result.code ?? (result.success ? 0 : 1),
-          stdout: new TextEncoder().encode(result.stdout || ""),
-          stderr: new TextEncoder().encode(result.stderr || ""),
-        }),
-    } as unknown as Deno.Command;
+    const p = Promise.resolve({
+      failed: !result.success,
+      exitCode: result.code ?? (result.success ? 0 : 1),
+      stdout: result.stdout || "",
+      stderr: result.stderr || "",
+      isCanceled: false,
+      isTerminated: false,
+      command: commandStr,
+      escapedCommand: commandStr
+    });
+    return p as any;
   });
 }
 
-function setupTestEnv() {
-  const cwd = Deno.makeTempDirSync();
-  const originalCwd = Deno.cwd();
+async function setupTestEnv() {
+  const cwd = await fs.mkdtemp(join(os.tmpdir(), "hb-test-"));
+  const originalCwd = process.cwd();
 
   // Create .hyperbranch structure
   const hbDir = join(cwd, ".hyperbranch");
   const runsDir = join(hbDir, ".runs");
   const tasksDir = join(hbDir, "tasks");
-  Deno.mkdirSync(runsDir, { recursive: true });
-  Deno.mkdirSync(tasksDir, { recursive: true });
+  await fs.mkdir(runsDir, { recursive: true });
+  await fs.mkdir(tasksDir, { recursive: true });
 
   // Set env var for tasks dir AND worktrees dir
-  Deno.env.set("HB_TASKS_DIR", tasksDir);
-  Deno.env.set("HB_RUNS_DIR", runsDir);
+  process.env.HB_TASKS_DIR = tasksDir;
+  process.env.HB_RUNS_DIR = runsDir;
 
   // Helper to create run scaffold
   const createRun = async (taskId: string, runIndex: number) => {
     // Logic from branch-naming.ts: hb/<taskId>/<runIndex> -> hb-<taskId>-<runIndex>
     const branchName = `hb-${taskId}-${runIndex}`;
     const runDir = join(runsDir, branchName);
-    await ensureDir(runDir);
+    await fs.mkdir(runDir, { recursive: true });
     const dotCurrentRun = join(runDir, ".hyperbranch", ".current-run");
-    await ensureDir(dotCurrentRun);
-    await Deno.writeTextFile(
+    await fs.mkdir(dotCurrentRun, { recursive: true });
+    await fs.writeFile(
       join(dotCurrentRun, "docker-compose.yml"),
       "version: '3'",
     );
@@ -101,212 +102,178 @@ function setupTestEnv() {
     runsDir,
     tasksDir,
     createRun,
-    teardown: () => {
+    teardown: async () => {
       try {
-        Deno.removeSync(cwd, { recursive: true });
+        await fs.rm(cwd, { recursive: true, force: true });
       } catch {}
     },
   };
 }
 
-// --- Tests ---
-
-Deno.test("hb rm <task>/<run> - remove inactive run", async () => {
-  const env = setupTestEnv();
-  const { runDir, dotCurrentRun } = await env.createRun("123", 1);
-
-  const cmdStub = mockCmd({
-    // Check Status (docker compose ps -q)
-    [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
-      { success: true, stdout: "" }, // Empty = not running
-
-    // Check Unmerged
-    "git rev-parse --verify hb/123/1": { success: true },
-    "git rev-parse --verify main": { success: true }, // Base branch
-    "git log hb/123/1 ^main --oneline": { success: true, stdout: "" }, // Clean
-
-    // Destroy: Down
-    [
-      `docker compose -f ${
-        join(dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-1 down -v`
-    ]: { success: true },
-
-    // Destroy: Remove Clone Remote
-    [`git remote remove hb-123-1`]: { success: true },
-    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
-
-    // Destroy: Delete Branch
-    "git branch -D hb/123/1": { success: true },
-
-    // Resolve base branch
-    "git rev-parse --verify hb/123": { success: false },
+describe("rm command", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  try {
-    const args = parseArgs(["rm", "123/1"]);
-    await rmCommand(args);
-  } finally {
-    cmdStub.restore();
-    env.teardown();
-  }
-});
+  it("hb rm <task>/<run> - remove inactive run", async () => {
+    const env = await setupTestEnv();
+    const { dotCurrentRun } = await env.createRun("123", 1);
 
-Deno.test("hb rm <task>/<run> - fail on active run", async () => {
-  const env = setupTestEnv();
-  const { dotCurrentRun } = await env.createRun("123", 1);
-  const consoleError = stub(console, "error");
-  const exitStub = stub(Deno, "exit", (code) => {
-    throw new Error(`EXIT:${code}`);
+    mockCmd({
+      // Check Status (docker compose ps -q)
+      [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
+        { success: true, stdout: "" }, // Empty = not running
+
+      // Check Unmerged
+      "git rev-parse --verify hb/123/1": { success: true },
+      "git rev-parse --verify main": { success: true }, // Base branch
+      "git log hb/123/1 ^main --oneline": { success: true, stdout: "" }, // Clean
+
+      // Destroy: Down
+      [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: { success: true },
+
+      // Destroy: Remove Clone Remote
+      [`git remote remove hb-123-1`]: { success: true },
+      "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
+
+      // Destroy: Delete Branch
+      "git branch -D hb/123/1": { success: true },
+
+      // Resolve base branch
+      "git rev-parse --verify hb/123": { success: false },
+    });
+
+    try {
+      await rmCmd.handler({ sweep: false, force: false, targets: ["123/1"] });
+    } finally {
+      await env.teardown();
+    }
   });
 
-  const cmdStub = mockCmd({
-    // Check Status (Running)
-    [
-      `docker compose -f ${
-        join(dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-1 ps -q -a task`
-    ]: { success: true, stdout: "hb-123-1-task-1" },
-    "docker inspect --format {{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}} hb-123-1-task-1":
-      { success: true, stdout: "running|2023-01-01|0" },
-    "git rev-parse --verify hb/123/1": { success: true },
+  it("hb rm <task>/<run> - fail on active run", async () => {
+    const env = await setupTestEnv();
+    const { dotCurrentRun } = await env.createRun("123", 1);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exitStub = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`EXIT:${code}`);
+    });
+
+    mockCmd({
+      // Check Status (Running)
+      [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 ps -q -a task`]: { success: true, stdout: "hb-123-1-task-1" },
+      "docker inspect --format {{.State.Status}}|{{.State.StartedAt}}|{{.State.ExitCode}} hb-123-1-task-1":
+        { success: true, stdout: "running|2023-01-01|0" },
+      "git rev-parse --verify hb/123/1": { success: true },
+    });
+
+    try {
+      await expect(rmCmd.handler({ sweep: false, force: false, targets: ["123/1"] })).rejects.toThrow("EXIT:1");
+
+      const calls = consoleError.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(calls).toContain("is active");
+    } finally {
+      await env.teardown();
+    }
   });
 
-  try {
-    const args = parseArgs(["rm", "123/1"]);
-    await assertRejects(() => rmCommand(args), Error, "EXIT:1");
+  it("hb rm <task>/<run> --force - remove active run", async () => {
+    const env = await setupTestEnv();
+    const { dotCurrentRun } = await env.createRun("123", 1);
 
-    const calls = consoleError.calls.map((c) => c.args.join(" ")).join("\n");
-    assert(calls.includes("is active"), "Should log active error");
-  } finally {
-    cmdStub.restore();
-    consoleError.restore();
-    exitStub.restore();
-    env.teardown();
-  }
-});
+    mockCmd({
+      // Destroy: Down
+      [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: { success: true },
 
-Deno.test("hb rm <task>/<run> --force - remove active run", async () => {
-  const env = setupTestEnv();
-  const { runDir, dotCurrentRun } = await env.createRun("123", 1);
+      // Destroy: Remove Clone Remote
+      [`git remote remove hb-123-1`]: { success: true },
+      "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
 
-  const cmdStub = mockCmd({
-    // Force skips status check and git check
+      // Destroy: Delete Branch
+      "git branch -D hb/123/1": { success: true },
+    });
 
-    // Destroy: Down
-    [
-      `docker compose -f ${
-        join(dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-1 down -v`
-    ]: { success: true },
-
-    // Destroy: Remove Clone Remote
-    [`git remote remove hb-123-1`]: { success: true },
-    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
-
-    // Destroy: Delete Branch
-    "git branch -D hb/123/1": { success: true },
+    try {
+      await rmCmd.handler({ sweep: false, force: true, targets: ["123/1"] });
+    } finally {
+      await env.teardown();
+    }
   });
 
-  try {
-    const args = parseArgs(["rm", "123/1", "--force"]);
-    await rmCommand(args);
-  } finally {
-    cmdStub.restore();
-    env.teardown();
-  }
-});
+  it("hb rm --sweep - cleans inactive/merged runs", async () => {
+    const env = await setupTestEnv();
+    const run1 = await env.createRun("123", 1);
+    const run2 = await env.createRun("123", 2);
 
-Deno.test("hb rm --sweep - cleans inactive/merged runs", async () => {
-  const env = setupTestEnv();
-  const run1 = await env.createRun("123", 1);
-  const run2 = await env.createRun("123", 2);
+    mockCmd({
+      "git rev-parse --verify main": { success: true },
 
-  const cmdStub = mockCmd({
-    "git rev-parse --verify main": { success: true },
+      // Run 1 Check:
+      // Status (Inactive)
+      [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
+        { success: true, stdout: "" },
+      // Clone Clean
+      [`git status --porcelain`]: { success: true, stdout: "" },
+      [`[${run1.runDir}] git status --porcelain`]: { success: true, stdout: "" },
+      // Merged
+      "git rev-parse --verify hb/123/1": { success: true },
+      "git rev-parse --verify hb/123": { success: false }, // Base
+      "git branch --merged main": { success: true, stdout: "  main\n+ hb/123/1" },
 
-    // Run 1 Check:
-    // Status (Inactive)
-    [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
-      { success: true, stdout: "" },
-    // Clone Clean
-    [`git status --porcelain`]: { success: true, stdout: "" },
-    [`[${run1.runDir}] git status --porcelain`]: { success: true, stdout: "" },
-    // Merged
-    "git rev-parse --verify hb/123/1": { success: true },
-    "git rev-parse --verify hb/123": { success: false }, // Base
-    "git branch --merged main": { success: true, stdout: "  main\n+ hb/123/1" },
+      // Run 2 Check:
+      // Status (Inactive)
+      [`docker compose -f ${join(run2.dotCurrentRun, "docker-compose.yml")} -p hb-123-2 ps -q`]: { success: true, stdout: "" },
+      // Clone Dirty
+      [`[${run2.runDir}] git status --porcelain`]: {
+        success: true,
+        stdout: "M file.txt",
+      },
 
-    // Run 2 Check:
-    // Status (Inactive)
-    [
-      `docker compose -f ${
-        join(run2.dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-2 ps -q`
-    ]: { success: true, stdout: "" },
-    // Clone Dirty
-    [`[${run2.runDir}] git status --porcelain`]: {
-      success: true,
-      stdout: "M file.txt",
-    },
+      // Destroy Run 1
+      [`docker compose -f ${join(run1.dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: { success: true },
+      [`git remote remove hb-123-1`]: { success: true },
+      "git fetch hb-123-1 hb-123-1:hb-123-1": { success: true },
+      "git branch -D hb/123/1": { success: true },
+    });
 
-    // Destroy Run 1
-    [
-      `docker compose -f ${
-        join(run1.dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-1 down -v`
-    ]: { success: true },
-    [`git remote remove hb-123-1`]: { success: true },
-    "git fetch hb-123-1 hb-123-1:hb-123-1": { success: true },
-    "git branch -D hb/123/1": { success: true },
+    try {
+      await rmCmd.handler({ sweep: true, force: false, targets: [] });
+    } finally {
+      await env.teardown();
+    }
   });
 
-  try {
-    const args = parseArgs(["rm", "--sweep"]);
-    await rmCommand(args);
-  } finally {
-    cmdStub.restore();
-    env.teardown();
-  }
-});
+  it("hb rm <hb/task/run> - remove inactive run with prefix", async () => {
+    const env = await setupTestEnv();
+    const { dotCurrentRun } = await env.createRun("123", 1);
 
-Deno.test("hb rm <hb/task/run> - remove inactive run with prefix", async () => {
-  const env = setupTestEnv();
-  const { runDir, dotCurrentRun } = await env.createRun("123", 1);
+    mockCmd({
+      // Check Status (docker compose ps -q)
+      [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
+        { success: true, stdout: "" }, // Empty = not running
 
-  const cmdStub = mockCmd({
-    // Check Status (docker compose ps -q)
-    [`docker compose -f /tmp/.*/docker-compose.yml -p hb-123-1 ps -q -a task`]:
-      { success: true, stdout: "" }, // Empty = not running
+      // Check Unmerged
+      "git rev-parse --verify hb/123/1": { success: true },
+      "git rev-parse --verify main": { success: true }, // Base branch
+      "git log hb/123/1 ^main --oneline": { success: true, stdout: "" }, // Clean
 
-    // Check Unmerged
-    "git rev-parse --verify hb/123/1": { success: true },
-    "git rev-parse --verify main": { success: true }, // Base branch
-    "git log hb/123/1 ^main --oneline": { success: true, stdout: "" }, // Clean
+      // Destroy: Down
+      [`docker compose -f ${join(dotCurrentRun, "docker-compose.yml")} -p hb-123-1 down -v`]: { success: true },
 
-    // Destroy: Down
-    [
-      `docker compose -f ${
-        join(dotCurrentRun, "docker-compose.yml")
-      } -p hb-123-1 down -v`
-    ]: { success: true },
+      // Destroy: Remove Clone Remote
+      [`git remote remove hb-123-1`]: { success: true },
+      "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
 
-    // Destroy: Remove Clone Remote
-    [`git remote remove hb-123-1`]: { success: true },
-    "git fetch hb-123-1 hb/123/1:hb/123/1": { success: true },
+      // Destroy: Delete Branch
+      "git branch -D hb/123/1": { success: true },
 
-    // Destroy: Delete Branch
-    "git branch -D hb/123/1": { success: true },
+      // Resolve base branch
+      "git rev-parse --verify hb/123": { success: false },
+    });
 
-    // Resolve base branch
-    "git rev-parse --verify hb/123": { success: false },
+    try {
+      await rmCmd.handler({ sweep: false, force: false, targets: ["hb/123/1"] });
+    } finally {
+      await env.teardown();
+    }
   });
-
-  try {
-    const args = parseArgs(["rm", "hb/123/1"]);
-    await rmCommand(args);
-  } finally {
-    cmdStub.restore();
-    env.teardown();
-  }
 });

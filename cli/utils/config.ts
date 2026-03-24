@@ -1,7 +1,7 @@
-import { exists } from "@std/fs/exists";
-import { parse } from "@std/toml";
-import { join } from "@std/path";
-import { deepMerge } from "@std/collections/deep-merge";
+import { access, readFile } from "node:fs/promises";
+import { parse } from "toml";
+import { join } from "node:path";
+import merge from "lodash.merge";
 
 export interface RunConfig {
   env_vars: string[];
@@ -11,10 +11,17 @@ const DEFAULT_CONFIG: RunConfig = {
   env_vars: [],
 };
 
-const MERGE_OPTS = { arrays: "replace" as const };
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function loadConfig(): Promise<RunConfig> {
-  const cwd = Deno.cwd();
+  const cwd = process.cwd();
   const globalConfigPath = join(cwd, ".hyperbranch.config.toml");
   const localConfigPath = join(cwd, ".hyperbranch", "config.toml");
 
@@ -23,9 +30,10 @@ export async function loadConfig(): Promise<RunConfig> {
   // Load local config (.hyperbranch/config.toml)
   if (await exists(localConfigPath)) {
     try {
-      const content = await Deno.readTextFile(localConfigPath);
+      const content = await readFile(localConfigPath, "utf-8");
       const parsed = parse(content) as unknown as Partial<RunConfig>;
-      config = deepMerge(config, parsed, MERGE_OPTS) as unknown as RunConfig;
+      config = merge({}, config, parsed) as unknown as RunConfig;
+      if (parsed.env_vars) config.env_vars = parsed.env_vars;
     } catch (e) {
       console.warn(`Warning: Failed to parse ${localConfigPath}: ${e}`);
     }
@@ -34,9 +42,10 @@ export async function loadConfig(): Promise<RunConfig> {
   // Load global config (.hyperbranch.config.toml) - Takes precedence
   if (await exists(globalConfigPath)) {
     try {
-      const content = await Deno.readTextFile(globalConfigPath);
+      const content = await readFile(globalConfigPath, "utf-8");
       const parsed = parse(content) as unknown as Partial<RunConfig>;
-      config = deepMerge(config, parsed, MERGE_OPTS) as unknown as RunConfig;
+      config = merge({}, config, parsed) as unknown as RunConfig;
+      if (parsed.env_vars) config.env_vars = parsed.env_vars;
     } catch (e) {
       console.warn(`Warning: Failed to parse ${globalConfigPath}: ${e}`);
     }

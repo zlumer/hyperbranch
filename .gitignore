@@ -5,4 +5,5 @@ _chats
 .hyperbranch/.worktrees
 .hyperbranch/.current-run
 node_modules
+dist
 .hyperbranch/opencode.jsonc

@@ -1,106 +1,61 @@
-#!/usr/bin/env -S deno run -A
-import { parseArgs } from "@std/cli/parse-args"
-import { ensureDir } from "@std/fs"
-import { TASKS_DIR } from "./utils/paths.ts"
-import { createCommand } from "./commands/create.ts"
-import { connectCommand } from "./commands/connect.ts"
-import { moveCommand } from "./commands/move.ts"
-import { runCommand } from "./commands/run.ts"
-import { logsCommand } from "./commands/logs.ts"
-import { stopCommand } from "./commands/stop.ts"
-import { psCommand } from "./commands/ps.ts"
-import { rmCommand } from "./commands/rm.ts"
-import { serverCommand } from "./commands/server.ts"
-import { portCommand } from "./commands/port.ts"
-import { mergeCommand } from "./commands/merge.ts"
-import { syncCommand } from "./commands/sync.ts"
-import { initCommand } from "./commands/init.ts"
+#!/usr/bin/env tsx
+import fs from "node:fs/promises";
+import { TASKS_DIR } from "./utils/paths.ts";
+import { subcommands, run } from "cmd-ts";
+
+import { createCmd } from "./commands/create.ts";
+import { connectCmd } from "./commands/connect.ts";
+import { moveCmd } from "./commands/move.ts";
+import { runCmd } from "./commands/run.ts";
+import { logsCmd } from "./commands/logs.ts";
+import { stopCmd } from "./commands/stop.ts";
+import { psCmd } from "./commands/ps.ts";
+import { rmCmd } from "./commands/rm.ts";
+import { serverCmd } from "./commands/server.ts";
+import { portCmd } from "./commands/port.ts";
+import { mergeCmd } from "./commands/merge.ts";
+import { syncCmd } from "./commands/sync.ts";
+import { initCmd } from "./commands/init.ts";
 
 // --- File I/O ---
 
-async function ensureRepo()
-{
-	await ensureDir(TASKS_DIR())
+async function ensureRepo() {
+  await fs.mkdir(TASKS_DIR(), { recursive: true }).catch((e: any) => {
+    if (e.code !== 'EEXIST') throw e;
+  });
 }
 
 // --- Main ---
 
-async function main()
-{
-	const args = parseArgs(Deno.args, {
-		boolean: ["edit", "sweep", "force", "f", "follow", "cleanup"],
-		string: ["parent", "depends-on", "child-of", "from-status", "strategy"],
-	})
+const app = subcommands({
+  name: 'hb',
+  description: 'Hyperbranch CLI Scaffolding',
+  cmds: {
+    create: createCmd,
+    connect: connectCmd,
+    move: moveCmd,
+    run: runCmd,
+    logs: logsCmd,
+    stop: stopCmd,
+    ps: psCmd,
+    rm: rmCmd,
+    server: serverCmd,
+    web: serverCmd,
+    port: portCmd,
+    merge: mergeCmd,
+    sync: syncCmd,
+    init: initCmd,
+  }
+});
 
-	const command = args._[0]
-
-	if (command !== "init") {
-		await ensureRepo()
-	}
-
-	switch (command)
-	{
-		case "create":
-			await createCommand(args)
-			break
-		case "connect":
-			await connectCommand(args)
-			break
-		case "move":
-			await moveCommand(args)
-			break
-		case "run":
-			await runCommand(args)
-			break
-		case "logs":
-			await logsCommand(args)
-			break
-		case "stop":
-			await stopCommand(args)
-			break
-		case "ps":
-			await psCommand()
-			break
-		case "rm":
-			await rmCommand(args)
-			break
-		case "server":
-		case "web":
-			await serverCommand(args)
-			break
-		case "port":
-			await portCommand(args)
-			break
-		case "merge":
-			await mergeCommand(args)
-			break
-		case "sync":
-			await syncCommand(args)
-			break
-		case "init":
-			await initCommand()
-			break
-		default:
-			console.log("Hyperbranch CLI Scaffolding")
-			console.log("Commands:")
-			console.log("  init")
-			console.log("  create [--parent <id>] [--edit] <title>")
-			console.log("  connect [--depends-on <id>] [--child-of <id>] <task-id>")
-			console.log("  move [--from-status <old>] <task-id> <new-status>")
-			console.log("  run <task-id> [--image <image>] [--exec <cmd>]")
-			console.log("  logs <task-id> <run-index> [-f|--follow]")
-			console.log("  stop <task-id>")
-			console.log("  rm <task-id>/<run-id>... | <task-id>... | --sweep")
-			console.log("  ps")
-			console.log("  server [--port <port>] (alias: web)")
-			console.log("  port <run-id> <port>")
-			console.log("  merge <task-id> <run-index> [--strategy <merge|squash|rebase>] [--cleanup]")
-			console.log("  sync <task-id>/<run-index>")
-			break
-	}
+async function main() {
+  const isInit = process.argv.slice(2)[0] === 'init';
+  if (!isInit) {
+    await ensureRepo();
+  }
+  run(app, process.argv.slice(2));
 }
 
-if (import.meta.main)
-{
-	main()
+if (import.meta.url.startsWith("file:")) {
+  main();
 }

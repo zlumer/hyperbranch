@@ -1,6 +1,8 @@
-import { exists } from "@std/fs"
-import { join } from "@std/path"
-import { create as createTask } from "../services/tasks.ts"
+import fs from "node:fs/promises";
+import { join } from "node:path";
+import { execa } from "execa";
+import { create as createTask } from "../services/tasks.ts";
+import { command } from "cmd-ts";
 
 const GITIGNORE_CONTENTS = `.env
 .env.*
@@ -20,21 +22,28 @@ move all existing tasks that are not yet marked as done to the \`hb\` task track
 
 async function isGitCmd(): Promise<boolean> {
   try {
-    const isGitCmd = new Deno.Command("git", { args: ["rev-parse", "--is-inside-work-tree"] })
-    const isGitRes = await isGitCmd.output()
-    return isGitRes.success
+    const { exitCode } = await execa("git", ["rev-parse", "--is-inside-work-tree"], { reject: false });
+    return exitCode === 0;
   } catch {
-    return false
+    return false;
   }
 }
 
 async function getRootGitDir(): Promise<string> {
-  const rootCmd = new Deno.Command("git", { args: ["rev-parse", "--show-toplevel"] })
-  const rootRes = await rootCmd.output()
-  if (rootRes.success) {
-    return new TextDecoder().decode(rootRes.stdout).trim()
+  const { exitCode, stdout } = await execa("git", ["rev-parse", "--show-toplevel"], { reject: false });
+  if (exitCode === 0) {
+    return stdout.trim();
   }
-  return ""
+  return "";
+}
+
+async function exists(path: string) {
+  try {
+    await fs.access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function validateGoogleApiKey(apiKey: string): Promise<"valid" | "invalid" | "unknown"> {
@@ -79,82 +88,75 @@ async function validateGoogleApiKey(apiKey: string): Promise<"valid" | "invalid"
   return "unknown"
 }
 
-export async function initCommand() {
-  // C-2. if pwd is not in git, warn the user and exit with error
-  if (!(await isGitCmd())) {
-    console.error("Error: Git is not installed or the current directory is not a git repository.")
-    Deno.exit(1)
-  }
-
-  // C-3. if pwd is not in git root, warn the user and explain that we will proceed with the root directory
-  const gitRoot = await getRootGitDir()
-  if (gitRoot && gitRoot !== Deno.cwd()) {
-    console.warn(`Warning: The current directory is not the git root. Proceeding with the root directory: ${gitRoot}`)
-    Deno.chdir(gitRoot)
-  }
-
-  // C-1. if .hyperbranch directory exists, warn the user and ask if should proceed
-  const hyperbranchDir = join(Deno.cwd(), ".hyperbranch")
-  if (await exists(hyperbranchDir)) {
-    const shouldProceed = confirm(".hyperbranch directory already exists. Do you want to proceed and potentially overwrite files?")
-    if (!shouldProceed) {
-      console.log("Aborting init.")
-      Deno.exit(0)
-    }
-  }
-
-  // S-1: ask the user their Google Gemini key
-  console.log("Please provide your Google Gemini API key.")
-  console.log("You can get one here: https://aistudio.google.com/app/apikey")
-  let apiKey = ""
-  while (true) {
-    apiKey = prompt("GEMINI_KEY:") || ""
-    if (!apiKey.trim()) {
-      console.error("API key is required.")
-      continue
+export const initCmd = command({
+  name: "init",
+  description: "Initialize hyperbranch",
+  args: {},
+  handler: async () => {
+    if (!(await isGitCmd())) {
+      console.error("Error: Git is not installed or the current directory is not a git repository.")
+      process.exit(1)
     }
 
-    // S-2: check that it works using a short fetch
-    console.log("Validating API key...")
-    const validationResult = await validateGoogleApiKey(apiKey)
+    const gitRoot = await getRootGitDir()
+    if (gitRoot && gitRoot !== process.cwd()) {
+      console.warn(`Warning: The current directory is not the git root. Proceeding with the root directory: ${gitRoot}`)
+      process.chdir(gitRoot)
+    }
+
+    const hyperbranchDir = join(process.cwd(), ".hyperbranch")
+    if (await exists(hyperbranchDir)) {
+      const shouldProceed = confirm(".hyperbranch directory already exists. Do you want to proceed and potentially overwrite files?")
+      if (!shouldProceed) {
+        console.log("Aborting init.")
+        process.exit(0)
+      }
+    }
+
+    console.log("Please provide your Google Gemini API key.")
+    console.log("You can get one here: https://aistudio.google.com/app/apikey")
+    let apiKey = ""
+    while (true) {
+      apiKey = prompt("GEMINI_KEY:") || ""
+      if (!apiKey.trim()) {
+        console.error("API key is required.")
+        continue
+      }
+
+      console.log("Validating API key...")
+      const validationResult = await validateGoogleApiKey(apiKey)
+      
+      if (validationResult === "invalid") {
+        console.error("Error: Invalid API key.")
+        console.log("Please check your API key and try again.")
+        continue
+      } else if (validationResult === "unknown") {
+        console.error("Failed to connect to the Gemini API or received unexpected error.")
+        const proceed = confirm("Could not validate API key. Proceed anyway?")
+        if (!proceed) continue
+      } else {
+        console.log("API key validated successfully.")
+      }
+      break
+    }
+
+    await fs.mkdir(join(hyperbranchDir, "tasks"), { recursive: true })
+    await fs.mkdir(join(hyperbranchDir, ".runs"), { recursive: true })
+
+    await fs.writeFile(join(hyperbranchDir, ".gitignore"), GITIGNORE_CONTENTS)
+    await fs.writeFile(join(hyperbranchDir, ".env.run"), ENV_RUN_CONTENTS(apiKey))
+
+    console.log("Creating test task...")
     
-    if (validationResult === "invalid") {
-      console.error("Error: Invalid API key.")
-      console.log("Please check your API key and try again.")
-      continue
-    } else if (validationResult === "unknown") {
-      console.error("Failed to connect to the Gemini API or received unexpected error.")
-      const proceed = confirm("Could not validate API key. Proceed anyway?")
-      if (!proceed) continue
-    } else {
-      console.log("API key validated successfully.")
+    try {
+      const task = await createTask("Initial hyperbranch setup", undefined, TASK_TEXT, "todo")
+      console.log(`Test task created: ${task.id}`)
+    } catch (e) {
+      console.error("Failed to create test task:", e)
     }
-    break
+
+    console.log("\\nSuccess! Hyperbranch is initialized.")
+    console.log("To view your tasks, start the web interface:")
+    console.log("  hb web")
   }
-
-  // S-3: create the .hyperbranch/tasks and .hyperbranch/.runs directories
-  await Deno.mkdir(join(hyperbranchDir, "tasks"), { recursive: true })
-  await Deno.mkdir(join(hyperbranchDir, ".runs"), { recursive: true })
-
-  // S-4: create the .hyperbranch/.gitignore file
-  await Deno.writeTextFile(join(hyperbranchDir, ".gitignore"), GITIGNORE_CONTENTS)
-
-  // S-5: create the .hyperbranch/.env.run file
-  await Deno.writeTextFile(join(hyperbranchDir, ".env.run"), ENV_RUN_CONTENTS(apiKey))
-
-  // S-6: run 'hb create' to create a test task
-  console.log("Creating test task...")
-  
-  // Using the Tasks service directly to allow setting description easily
-  try {
-    const task = await createTask("Initial hyperbranch setup", undefined, TASK_TEXT, "todo")
-    console.log(`Test task created: ${task.id}`)
-  } catch (e) {
-    console.error("Failed to create test task:", e)
-  }
-
-  // S-7: print info on how to start hyperbranch server (hb web)
-  console.log("\\nSuccess! Hyperbranch is initialized.")
-  console.log("To view your tasks, start the web interface:")
-  console.log("  hb web")
-}
+});

@@ -1,119 +1,106 @@
-import { assertEquals } from "@std/assert"
-import { stub } from "@std/testing/mock"
-import { join } from "@std/path"
+import { describe, it, expect, vi, afterEach } from "vitest"
+import { join } from "node:path"
+import { mkdtemp, rm, writeFile, stat } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import * as System from "./system.ts"
+import * as execaModule from "execa"
 
-// Helper to mock Deno.Command for package managers
+vi.mock("execa", () => {
+  return {
+    execa: vi.fn()
+  }
+})
+
 function mockPkgManagers(outputs: Record<string, string>) {
-	// @ts-ignore: Stubbing Deno.Command
-	return stub(Deno, "Command", (cmd: string | URL, options?: Deno.CommandOptions) => {
-		const args = options?.args || [];
-		const fullCmd = [cmd, ...args].join(" ");
-		
-		if (outputs[fullCmd]) {
-			return {
-				output: () => Promise.resolve({
-					success: true,
-					code: 0,
-					stdout: new TextEncoder().encode(outputs[fullCmd]),
-					stderr: new Uint8Array()
-				})
-			} as unknown as Deno.Command;
-		}
-		
-		return {
-			output: () => Promise.resolve({
-				success: false,
-				code: 1,
-				stdout: new Uint8Array(),
-				stderr: new TextEncoder().encode("Command not found")
-			})
-		} as unknown as Deno.Command;
-	});
+  return vi.mocked(execaModule.execa).mockImplementation((cmd, args) => {
+    const fullCmd = [cmd, ...(args || [])].join(" ");
+    if (outputs[fullCmd]) {
+      return Promise.resolve({ stdout: outputs[fullCmd] }) as any;
+    }
+    return Promise.reject(new Error("Command not found"));
+  })
 }
 
-Deno.test("getPackageCacheMounts - detects npm", async () => {
-	const tempDir = await Deno.makeTempDir();
-	const originalCwd = Deno.cwd();
-	const cmdStub = mockPkgManagers({
-		"npm config get cache": "/mock/npm/cache"
-	});
+describe("System utils", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
-	try {
-		Deno.chdir(tempDir);
-		await Deno.writeTextFile("package-lock.json", "{}");
+  it("getPackageCacheMounts - detects npm", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'test-'))
+    const originalCwd = process.cwd()
+    mockPkgManagers({
+      "npm config get cache": "/mock/npm/cache"
+    })
 
-		const mounts = await System.getPackageCacheMounts();
-		assertEquals(mounts, [["/mock/npm/cache", "/root/.npm"]]);
-	} finally {
-		Deno.chdir(originalCwd);
-		await Deno.remove(tempDir, { recursive: true });
-		cmdStub.restore();
-	}
-});
+    try {
+      process.chdir(tempDir)
+      await writeFile("package-lock.json", "{}")
 
-Deno.test("getPackageCacheMounts - detects multiple", async () => {
-	const tempDir = await Deno.makeTempDir();
-	const originalCwd = Deno.cwd();
-	const cmdStub = mockPkgManagers({
-		"npm config get cache": "/mock/npm/cache",
-		"yarn cache dir": "/mock/yarn/cache"
-	});
+      const mounts = await System.getPackageCacheMounts()
+      expect(mounts).toEqual([["/mock/npm/cache", "/root/.npm"]])
+    } finally {
+      process.chdir(originalCwd)
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
 
-	try {
-		Deno.chdir(tempDir);
-		await Deno.writeTextFile("package-lock.json", "{}");
-		await Deno.writeTextFile("yarn.lock", "");
+  it("getPackageCacheMounts - detects multiple", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'test-'))
+    const originalCwd = process.cwd()
+    mockPkgManagers({
+      "npm config get cache": "/mock/npm/cache",
+      "yarn cache dir": "/mock/yarn/cache"
+    })
 
-		const mounts = await System.getPackageCacheMounts();
-		assertEquals(mounts.length, 2);
-		assertEquals(mounts, [
-			["/mock/npm/cache", "/root/.npm"],
-			["/mock/yarn/cache", "/usr/local/share/.cache/yarn"]
-		]);
-	} finally {
-		Deno.chdir(originalCwd);
-		await Deno.remove(tempDir, { recursive: true });
-		cmdStub.restore();
-	}
-});
+    try {
+      process.chdir(tempDir)
+      await writeFile("package-lock.json", "{}")
+      await writeFile("yarn.lock", "")
 
-Deno.test("getAgentConfigMount - creates dir and returns mount", async () => {
-	const tempHome = await Deno.makeTempDir();
-	const originalEnv = Deno.env.get;
-	
-	const envStub = stub(Deno.env, "get", (key: string) => {
-		if (key === "HOME") return tempHome;
-		return originalEnv(key);
-	});
+      const mounts = await System.getPackageCacheMounts()
+      expect(mounts).toHaveLength(2)
+      expect(mounts).toEqual([
+        ["/mock/npm/cache", "/root/.npm"],
+        ["/mock/yarn/cache", "/usr/local/share/.cache/yarn"]
+      ])
+    } finally {
+      process.chdir(originalCwd)
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
 
-	try {
-		const mount = await System.getAgentConfigMount();
-		const opencodePath = join(tempHome, ".opencode");
-		
-		// Check dir creation
-		const stat = await Deno.stat(opencodePath);
-		assertEquals(stat.isDirectory, true);
-		
-		// Check string
-		assertEquals(mount, [`${opencodePath}`, `/root/.opencode:ro`]);
-	} finally {
-		envStub.restore();
-		await Deno.remove(tempHome, { recursive: true });
-	}
-});
+  it("getAgentConfigMount - creates dir and returns mount", async () => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'test-'))
+    const originalHome = process.env.HOME
+    
+    process.env.HOME = tempHome
 
-Deno.test("getEnvVars - filters vars", () => {
-	const originalEnv = Deno.env.toObject();
-	Deno.env.set("TEST_VAR_A", "valueA");
-	Deno.env.set("TEST_VAR_B", "valueB");
-	
-	try {
-		const vars = System.getEnvVars(["TEST_VAR_A", "MISSING_VAR"]);
-		assertEquals(vars, { "TEST_VAR_A": "valueA" });
-		assertEquals(vars["TEST_VAR_B"], undefined);
-	} finally {
-		Deno.env.delete("TEST_VAR_A");
-		Deno.env.delete("TEST_VAR_B");
-	}
-});
+    try {
+      const mount = await System.getAgentConfigMount()
+      const opencodePath = join(tempHome, ".opencode")
+      
+      const s = await stat(opencodePath)
+      expect(s.isDirectory()).toBe(true)
+      
+      expect(mount).toEqual([`${opencodePath}`, `/root/.opencode:ro`])
+    } finally {
+      process.env.HOME = originalHome
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+
+  it("getEnvVars - filters vars", () => {
+    const originalEnv = { ...process.env }
+    process.env.TEST_VAR_A = "valueA"
+    process.env.TEST_VAR_B = "valueB"
+    
+    try {
+      const vars = System.getEnvVars(["TEST_VAR_A", "MISSING_VAR"])
+      expect(vars).toEqual({ "TEST_VAR_A": "valueA" })
+      expect(vars["TEST_VAR_B"]).toBeUndefined()
+    } finally {
+      process.env = originalEnv
+    }
+  })
+})

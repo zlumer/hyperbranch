@@ -1,7 +1,8 @@
 import { generateRouter } from "orpc-file-based-router"
-import { join, fromFileUrl, dirname } from "@std/path"
+import { join } from "node:path"
+import * as fs from "node:fs/promises"
 
-const __dirname = dirname(fromFileUrl(import.meta.url))
+const __dirname = import.meta.dirname
 const routesDir = join(__dirname, "routes")
 const outputFile = join(__dirname, "router.ts")
 
@@ -12,9 +13,9 @@ await generateRouter(routesDir, outputFile, {
 })
 
 // Fix paths in generated router
-const content = await Deno.readTextFile(outputFile)
+const content = await fs.readFile(outputFile, "utf-8")
 let fixedContent = content.replace(/path: '\/root'/g, "path: '/'")
 fixedContent = fixedContent.replace(/path: ''/g, "path: '/'") // just in case
-await Deno.writeTextFile(outputFile, fixedContent)
+await fs.writeFile(outputFile, fixedContent, "utf-8")
 
 console.log("Router generated successfully.")

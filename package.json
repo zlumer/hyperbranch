@@ -4,7 +4,7 @@
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
   "scripts": {
-    "test": "cd cli && deno task test"
+    "test": "cd cli && npm run test"
   },
   "keywords": [
     "ai",

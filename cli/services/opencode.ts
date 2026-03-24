@@ -1,5 +1,5 @@
-import { createOpencodeClient } from "npm:@opencode-ai/sdk";
-import type { Event, OpencodeClient } from "npm:@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk";
+import type { Event, OpencodeClient } from "@opencode-ai/sdk";
 
 export type OpencodeState = "idle" | "working" | "blocked" | "offline" | "error";
 

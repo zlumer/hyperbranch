@@ -1,21 +1,19 @@
 import { RunId, TaskId } from "./id.ts";
 import { loadTask } from "./loadTask.ts";
 import { getTaskPath } from "./tasks.ts";
+import { execa } from "execa";
 
 // Helper to run git command
 export async function git(args: string[], cwd?: string): Promise<string> {
-  const command = new Deno.Command("git", {
-    args,
-    cwd: cwd || Deno.cwd(),
-    stdout: "piped",
-    stderr: "piped",
-  });
-  const output = await command.output();
-  if (!output.success) {
-    const stderr = new TextDecoder().decode(output.stderr).trim();
+  try {
+    const { stdout } = await execa("git", args, {
+      cwd: cwd || process.cwd()
+    });
+    return stdout.trim();
+  } catch (error: any) {
+    const stderr = error.stderr || error.message;
     throw new Error(`Git command failed: git ${args.join(" ")}\n${stderr}`);
   }
-  return new TextDecoder().decode(output.stdout).trim();
 }
 
 export async function add(files: string[], cwd?: string): Promise<void> {
@@ -196,24 +194,6 @@ export async function merge(
     args.push("--squash");
   }
   args.push(branch);
-
-  // Rebase requires checking out the branch to be rebased?
-  // Usually "git rebase master" while on feature branch rebases feature onto master.
-  // "git rebase master feature" checks out feature and rebases onto master.
-
-  // Here we want to merge `branch` INTO current branch.
-  // "git merge branch"
-  // "git merge --squash branch"
-  // "git rebase branch" (rebases current onto branch? No, usually we want to merge branch into current)
-
-  // If strategy is rebase, it's ambiguous.
-  // "Merge the run's clone/branch back to the main branch."
-  // If I am on Main, and I want to "Merge" RunBranch:
-  // - Merge: git merge RunBranch
-  // - Squash: git merge --squash RunBranch
-  // - Rebase: git rebase Main RunBranch (Rebases RunBranch onto Main) -> Then fast-forward merge Main to RunBranch?
-
-  // Let's stick to Merge and Squash for now as they modify the current branch.
 
   await git(args);
 }

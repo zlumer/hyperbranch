@@ -1,6 +1,7 @@
-import { exists } from "@std/fs/exists";
-import { copy as copyDir } from "@std/fs/copy";
-import { join } from "@std/path";
+import fs from "node:fs";
+const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
+const copyDir = async (src: string, dest: string, opts: any) => await fs.promises.cp(src, dest, { recursive: true, force: opts.overwrite });
+import { join } from "node:path";
 import * as Git from "../utils/git.ts";
 import * as GitClones from "../utils/git-clones.ts";
 import * as Docker from "../utils/docker.ts";
@@ -160,7 +161,7 @@ export async function destroy(ctx: RunContext): Promise<void> {
  * Logs
  * Streams logs from the container.
  */
-export async function logs(ctx: RunContext, follow: boolean = false): Promise<Deno.ChildProcess> {
+export async function logs(ctx: RunContext, follow: boolean = false): Promise<any> {
    // We use docker compose logs
    // This returns the process so the caller can pipe stdout/stderr
    return Compose.logs(ctx.paths.runDir, ctx.paths.composeFile, ctx.dockerProjectName, follow);

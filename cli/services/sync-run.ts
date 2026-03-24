@@ -1,4 +1,5 @@
-import { exists } from "@std/fs/exists";
+import fs from "node:fs";
+const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
 import * as Git from "../utils/git.ts";
 import * as Docker from "../utils/docker.ts";
 import * as Compose from "../utils/docker-compose.ts";

@@ -1,7 +1,7 @@
 import { MiddlewareHandler } from "hono";
 
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
-  const apiKey = Deno.env.get("HB_API_KEY");
+  const apiKey = process.env.HB_API_KEY;
   
   // If no API key is set on the server, we might want to warn or block.
   // Assuming main.ts ensures it is set.

@@ -4,7 +4,8 @@ import { checkTaskExists, loadTask, saveTask } from "../utils/loadTask.ts"
 import * as Git from "../utils/git.ts"
 import * as Docker from "../utils/docker.ts"
 import * as Runs from "./runs.ts"
-import { TaskId } from "../utils/id.ts";
+import { TaskId } from "../utils/id.ts"
+import fs from "node:fs"
 
 /**
  * Create a new task.
@@ -135,7 +136,7 @@ export async function remove(task: TaskId, force = false): Promise<void> {
 
   if (taskExists) {
       const path = getTaskPath(task.id);
-      await Deno.remove(path);
+      await fs.promises.rm(path, { recursive: true, force: true })
       console.log(`Removed task: ${task}`);
   }
 

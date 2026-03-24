@@ -1,4 +1,4 @@
-import { join, resolve } from "@std/path";
+import { join, resolve } from "node:path";
 import { getRunDir as getRunDirFromClone, RUNS_DIR, TASKS_DIR } from "../utils/paths.ts";
 import { RunContext } from "./types.ts";
 import { RunId } from "../utils/id.ts";

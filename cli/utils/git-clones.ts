@@ -1,6 +1,15 @@
 import { git } from "./git.ts";
-import { exists } from "@std/fs/exists";
+import { access, rm } from "node:fs/promises";
 import { RunId } from "./id.ts";
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function createClone(
   branch: string,
@@ -8,7 +17,7 @@ export async function createClone(
   clonePath: string,
   mainRepoPath?: string,
 ): Promise<void> {
-  const cwd = mainRepoPath || Deno.cwd();
+  const cwd = mainRepoPath || process.cwd();
 
   // a) create the branch in the main repo: `git branch <branch> <base>`
   await git(["branch", branch, base], cwd);
@@ -36,18 +45,18 @@ export async function removeClone(
   force = false,
   mainRepoPath?: string,
 ): Promise<void> {
-  const cwd = mainRepoPath || Deno.cwd();
+  const cwd = mainRepoPath || process.cwd();
 
-  // a) Try to remove the directory Deno.remove(clonePath, { recursive: true })
+  // a) Try to remove the directory
   if (await exists(clonePath)) {
     try {
-      await Deno.remove(clonePath, { recursive: true });
+      await rm(clonePath, { recursive: true, force: true });
     } catch (e: unknown) {
       if (!force) throw e;
     }
   }
 
-  // b) Remove the remote from the main repo: `git remote remove hb-<task>-<run>`. Ignore errors if remote is already gone.
+  // b) Remove the remote from the main repo
   const branchInfo = RunId.fromString(branch);
   if (branchInfo) {
     const remoteName = branchInfo.toDirectorySlug();
