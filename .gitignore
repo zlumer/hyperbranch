@@ -6,4 +6,5 @@ _chats
 .hyperbranch/.current-run
 node_modules
 dist
+coverage
 .hyperbranch/opencode.jsonc
