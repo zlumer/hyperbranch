@@ -2,7 +2,9 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import { create as createTask } from "../services/tasks.ts";
 import { command } from "cmd-ts";
-import { hasGitCmd, getRootGitDir } from "../utils/git.js";
+import { isGitRepository, getRootGitDir } from "../utils/git.js";
+import * as git from "../utils/git.js"
+import { RUNS_DIR, TASKS_DIR } from "../utils/paths.js";
 
 const GITIGNORE_CONTENTS = `.env
 .env.*
@@ -76,7 +78,7 @@ export const initCmd = command({
   description: "Initialize hyperbranch",
   args: {},
   handler: async () => {
-    if (!(await hasGitCmd())) {
+    if (!(await isGitRepository())) {
       console.error("Error: Git is not installed or the current directory is not a git repository.")
       process.exit(1)
     }
@@ -123,11 +125,22 @@ export const initCmd = command({
       break
     }
 
-    await fs.mkdir(join(hyperbranchDir, "tasks"), { recursive: true })
-    await fs.mkdir(join(hyperbranchDir, ".runs"), { recursive: true })
+    await fs.mkdir(TASKS_DIR(hyperbranchDir), { recursive: true })
+    await fs.mkdir(RUNS_DIR(hyperbranchDir), { recursive: true })
 
     await fs.writeFile(join(hyperbranchDir, ".gitignore"), GITIGNORE_CONTENTS)
     await fs.writeFile(join(hyperbranchDir, ".env.run"), ENV_RUN_CONTENTS(apiKey))
+
+	await git.add([join(".hyperbranch", ".gitignore")])
+
+	const shouldCommit = confirm("Do you want to commit the Hyperbranch .gitignore to git?")
+	if (shouldCommit) {
+		const commitMessage = "Initialize Hyperbranch with .hyperbranch directory, .gitignore, and .env.run"
+		await git.commit(commitMessage, [join(".hyperbranch", ".gitignore"), join(".hyperbranch", ".env.run")])
+		console.log("Initialization files committed to git.")
+	} else {
+		console.log("Initialization files were not committed. You can commit them manually later.")
+	}
 
     console.log("Creating test task...")
     
@@ -138,7 +151,7 @@ export const initCmd = command({
       console.error("Failed to create test task:", e)
     }
 
-    console.log("\\nSuccess! Hyperbranch is initialized.")
+    console.log("\nSuccess! Hyperbranch is initialized.")
     console.log("To view your tasks, start the web interface:")
     console.log("  hb web")
   }
