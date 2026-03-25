@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import { join } from "node:path";
-import { execa } from "execa";
 import { create as createTask } from "../services/tasks.ts";
 import { command } from "cmd-ts";
+import { hasGitCmd, getRootGitDir } from "../utils/git.js";
 
 const GITIGNORE_CONTENTS = `.env
 .env.*
@@ -19,23 +19,6 @@ AIDER_WEAK_MODEL="gemini/gemini-3-flash-preview"
 const TASK_TEXT = `explore the current codebase with a subagent and find out how tasks are tracked (beans, backlog.md, todo list, todo comments)
 read https://github.com/zlumer/hyperbranch and learn how to use \`hb\` cli
 move all existing tasks that are not yet marked as done to the \`hb\` task tracking`
-
-async function isGitCmd(): Promise<boolean> {
-  try {
-    const { exitCode } = await execa("git", ["rev-parse", "--is-inside-work-tree"], { reject: false });
-    return exitCode === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function getRootGitDir(): Promise<string> {
-  const { exitCode, stdout } = await execa("git", ["rev-parse", "--show-toplevel"], { reject: false });
-  if (exitCode === 0) {
-    return stdout.trim();
-  }
-  return "";
-}
 
 async function exists(path: string) {
   try {
@@ -93,7 +76,7 @@ export const initCmd = command({
   description: "Initialize hyperbranch",
   args: {},
   handler: async () => {
-    if (!(await isGitCmd())) {
+    if (!(await hasGitCmd())) {
       console.error("Error: Git is not installed or the current directory is not a git repository.")
       process.exit(1)
     }

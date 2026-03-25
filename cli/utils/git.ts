@@ -36,6 +36,23 @@ export async function fetch(remote: string, refspec: string): Promise<void> {
   await git(["fetch", remote, refspec]);
 }
 
+export async function hasGitCmd(): Promise<boolean> {
+  try {
+	const { exitCode } = await execa("git", ["rev-parse", "--is-inside-work-tree"], { reject: false });
+	return exitCode === 0;
+  } catch {
+	return false;
+  }
+}
+
+export async function getRootGitDir(): Promise<string> {
+  const { exitCode, stdout } = await execa("git", ["rev-parse", "--show-toplevel"], { reject: false });
+  if (exitCode === 0) {
+	return stdout.trim();
+  }
+  return "";
+}
+
 export async function getCurrentBranch(): Promise<string> {
   return await git(["rev-parse", "--abbrev-ref", "HEAD"]);
 }
