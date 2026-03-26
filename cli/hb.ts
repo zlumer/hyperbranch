@@ -126,6 +126,9 @@ async function main() {
 	await requireHbInitialized(workingDir);
   }
 
+  // save original cwd for commands that need to know where they were run from
+  process.env.HB_ORIGINAL_CWD = process.cwd();
+
   // change cwd to git root to ensure consistent behavior
   process.chdir(gitRoot)
   run(app, process.argv.slice(2));

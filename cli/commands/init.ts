@@ -83,10 +83,18 @@ export const initCmd = command({
       process.exit(1)
     }
 
+    const originalCwd = process.env.HB_ORIGINAL_CWD || process.cwd()
     const gitRoot = await getRootGitDir()
-    if (gitRoot && gitRoot !== process.cwd()) {
+    
+    if (gitRoot && gitRoot !== originalCwd) {
+      if (await exists(join(originalCwd, ".hyperbranch"))) {
+        const shouldProceed = confirm(".hyperbranch directory already exists. Do you want to proceed and potentially overwrite files?")
+        if (!shouldProceed) {
+          console.log("Aborting init.")
+          process.exit(0)
+        }
+      }
       console.warn(`Warning: The current directory is not the git root. Proceeding with the root directory: ${gitRoot}`)
-      process.chdir(gitRoot)
     }
 
     const hyperbranchDir = join(process.cwd(), ".hyperbranch")
@@ -131,12 +139,11 @@ export const initCmd = command({
     await fs.writeFile(join(hyperbranchDir, ".gitignore"), GITIGNORE_CONTENTS)
     await fs.writeFile(join(hyperbranchDir, ".env.run"), ENV_RUN_CONTENTS(apiKey))
 
-	await git.add([join(".hyperbranch", ".gitignore")])
-
 	const shouldCommit = confirm("Do you want to commit the Hyperbranch .gitignore to git?")
 	if (shouldCommit) {
+		await git.add([join(".hyperbranch", ".gitignore")])
 		const commitMessage = "Initialize Hyperbranch with .hyperbranch directory, .gitignore, and .env.run"
-		await git.commit(commitMessage, [join(".hyperbranch", ".gitignore"), join(".hyperbranch", ".env.run")])
+		await git.commit(commitMessage, [join(".hyperbranch", ".gitignore")])
 		console.log("Initialization files committed to git.")
 	} else {
 		console.log("Initialization files were not committed. You can commit them manually later.")
@@ -154,5 +161,6 @@ export const initCmd = command({
     console.log("\nSuccess! Hyperbranch is initialized.")
     console.log("To view your tasks, start the web interface:")
     console.log("  hb web")
+    process.exit(0)
   }
 });
