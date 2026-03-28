@@ -12,7 +12,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "serve": "tsx server/main.ts",
     "gen": "tsx server/router-gen.ts",
 	"build": "tsdown && node -e \"const fs=require('fs'); if(fs.existsSync('dist/hb.mjs')) fs.renameSync('dist/hb.mjs', 'dist/hb.js'); const file='dist/hb.js'; fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('#!/usr/bin/env -S npx -y tsx', '#!/usr/bin/env node'))\""
   },

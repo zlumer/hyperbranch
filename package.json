@@ -9,7 +9,9 @@
   },
   "scripts": {
     "test": "cd cli && npm run test",
-    "build": "cd cli && npm run build"
+    "build:cli": "pushd cli && npm run build && popd",
+	"build:frontend": "pushd frontend && npm run build && popd",
+	"build": "npm run build:cli && npm run build:frontend"
   },
   "keywords": [
     "ai",
@@ -19,7 +21,8 @@
     "aider"
   ],
   "files": [
-    "/cli/dist/hb.js"
+    "/cli/dist/hb.js",
+	"/frontend/dist/"
   ],
   "repository": {
     "type": "git",

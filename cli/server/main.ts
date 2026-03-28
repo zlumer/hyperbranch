@@ -53,17 +53,17 @@ app.notFound((c) => {
 });
 
 // Routes
-app.all("/tasks", async (c) => {
+app.all("/api/tasks", async (c) => {
   const { matched, response } = await orpcHandler.handle(c.req.raw, {
-    prefix: "/tasks",
+    prefix: "/api/tasks",
   });
   if (matched) return response;
   return c.json({ error: "Not Found" }, 404);
 });
 
-app.all("/tasks/*", async (c) => {
+app.all("/api/tasks/*", async (c) => {
   const { matched, response } = await orpcHandler.handle(c.req.raw, {
-    prefix: "/tasks",
+    prefix: "/api/tasks",
   });
   if (matched) return response;
   return c.json({ error: "Not Found" }, 404);
