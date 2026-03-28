@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { serveStatic } from '@hono/node-server/serve-static'
 import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { corsMiddleware } from "./middleware/cors.js";
@@ -7,6 +8,7 @@ import { router } from "./router.js";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodSmartCoercionPlugin } from "@orpc/zod";
 import { ORPCError } from "@orpc/server";
+import path from "path";
 
 // Generate API key if not set
 export function ensureApiKey() {
@@ -68,6 +70,8 @@ app.all("/api/tasks/*", async (c) => {
   if (matched) return response;
   return c.json({ error: "Not Found" }, 404);
 });
+
+app.use("/*", serveStatic({ root: path.resolve(import.meta.dirname, "../../frontend/dist") }));
 
 // Start Server
 const port = parseInt(process.env.PORT || "8000");
