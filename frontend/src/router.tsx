@@ -1,23 +1,13 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
-import { LoginPage } from './pages/login-page';
+import { createBrowserRouter, Outlet } from 'react-router-dom';
 import { BoardPage } from './pages/board-page';
 import { TaskDetailsPage } from './pages/task-details-page';
 import { RunWorkspacePage } from './pages/run-workspace-page';
-import { useAuth } from './context/auth-context';
 
 const ProtectedRoute = () => {
-  const { apiKey } = useAuth();
-  if (!apiKey) {
-    return <Navigate to="/login" replace />;
-  }
   return <Outlet />;
 };
 
 export const router = createBrowserRouter([
-  {
-    path: '/login',
-    element: <LoginPage />,
-  },
   {
     path: '/',
     element: <ProtectedRoute />,

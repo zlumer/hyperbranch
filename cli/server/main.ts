@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { serveStatic } from '@hono/node-server/serve-static'
-import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { router } from "./router.js";
@@ -10,23 +9,10 @@ import { ZodSmartCoercionPlugin } from "@orpc/zod";
 import { ORPCError } from "@orpc/server";
 import path from "path";
 
-// Generate API key if not set
-export function ensureApiKey() {
-  if (!process.env.HB_API_KEY) {
-    const key = crypto.randomUUID();
-    process.env.HB_API_KEY = key;
-    console.log(`Generated HB_API_KEY: ${key}`);
-    console.log("Set this in your client or environment to authenticate.");
-  } else {
-    console.log("Using HB_API_KEY from environment.");
-  }
-}
-
 const app = new Hono();
 
 // Global Middleware
 app.use("*", corsMiddleware);
-// app.use("*", authMiddleware);
 
 // oRPC OpenAPI Handler
 const orpcHandler = new OpenAPIHandler(router, {
@@ -78,7 +64,6 @@ const port = parseInt(process.env.PORT || "8000");
 
 // Check if we are being run directly
 if (import.meta.url === `file://${process.argv[1]}` || import.meta.main) {
-  ensureApiKey();
   console.log(`Server starting on http://localhost:${port}`);
   serve({ fetch: app.fetch, port });
 }

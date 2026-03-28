@@ -1,4 +1,4 @@
-import app, { ensureApiKey } from "../server/main.js";
+import app from "../server/main.js";
 import { command, string, option } from "cmd-ts";
 import { serve } from "@hono/node-server";
 
@@ -17,7 +17,6 @@ export const serverCmd = command({
       process.exit(1);
     }
 
-    ensureApiKey();
     console.log(`Server starting on http://localhost:${port}`);
     serve({ fetch: app.fetch, port });
   }
