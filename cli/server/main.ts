@@ -17,6 +17,9 @@ app.use("*", corsMiddleware);
 const orpcHandler = new OpenAPIHandler(router, {
   plugins: [new ZodSmartCoercionPlugin()],
   customErrorResponseBodyEncoder(error) {
+    if (!error.status || error.status >= 500) {
+      console.error("[oRPC Server Error]:", error);
+    }
     return {
       error: error.message || error.code,
       code: error.code,
@@ -27,11 +30,15 @@ const orpcHandler = new OpenAPIHandler(router, {
 // Error Handling
 app.onError((err, c) => {
   if (err instanceof ORPCError) {
+    if (!err.status || err.status >= 500) {
+      console.error("[Hono ORPCError]:", err);
+    }
     return c.json(
       { error: err.message || err.code, code: err.code },
       (err.status as any) || 500
     );
   }
+  console.error("[Hono Unhandled Error]:", err);
   return errorHandler(err, c);
 });
 
