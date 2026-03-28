@@ -1,4 +1,5 @@
 #!/usr/bin/env -S npx -y tsx
+import { execa } from "execa";
 import fs from "node:fs/promises";
 import { HYPERBRANCH_DIR, RUNS_DIR, TASKS_DIR, TASKS_DIR_NAME } from "../utils/paths.js";
 import { subcommands, run } from "cmd-ts";
@@ -94,6 +95,15 @@ async function requireGitRepo() {
 
 	return gitRoot;
 }
+
+async function checkDockerInstalled() {
+	try {
+		await execa("docker", ["--version"]);
+	} catch (e) {
+		console.error("Error: Docker is not installed or not in PATH. Some commands may fail.");
+	}
+}
+
 // --- Main ---
 
 const app = subcommands({
@@ -118,6 +128,8 @@ const app = subcommands({
 });
 
 async function main() {
+  await checkDockerInstalled();
+
   const gitRoot = await requireGitRepo()
   const workingDir = await getWorkingDir(gitRoot)
 
@@ -137,4 +149,3 @@ async function main() {
 if (import.meta.url.startsWith("file:")) {
   main();
 }
-
