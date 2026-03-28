@@ -15,7 +15,10 @@ export default defineConfig({
   target: 'node20',
   platform: 'node',
   deps: {
-	alwaysBundle: Object.keys(packageJson.dependencies || {}),
+	alwaysBundle: [
+		...Object.keys(packageJson.dependencies || {}),
+		/.*/
+	],
 	neverBundle: Object.keys(packageJson.devDependencies || {}),
 	onlyBundle: false,
   },
@@ -24,16 +27,17 @@ export default defineConfig({
 	{
 		const HB_PATH = path.join(ctx.options.outDir, 'hb.mjs');
 		const JS_OUT_PATH = HB_PATH.replace(/\.mjs$/, '.js');
-		let content = fs.readFileSync(HB_PATH, 'utf-8');
+		fs.renameSync(HB_PATH, JS_OUT_PATH);
+
+		let content = fs.readFileSync(JS_OUT_PATH, 'utf-8');
 		if (content.startsWith('#!'))
 			content = content.replace(/^#!.*\n/, '');
 		else
-			console.warn('Warning: Generated hb.mjs does not start with a shebang. Adding shebang.');
+			console.warn('Warning: Generated hb.js does not start with a shebang. Adding shebang.');
 		
 		content = NODE_SHEBANG + content;
 		
 		fs.writeFileSync(JS_OUT_PATH, content);
-		fs.chmodSync(JS_OUT_PATH, 0o755);
 	},
   }
 });

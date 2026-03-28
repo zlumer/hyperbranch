@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { serve } from "@hono/node-server";
 import { serveStatic } from '@hono/node-server/serve-static'
 import { errorHandler } from "./middleware/errorHandler.js";
 import { corsMiddleware } from "./middleware/cors.js";
@@ -58,14 +57,5 @@ app.all("/api/tasks/*", async (c) => {
 });
 
 app.use("/*", serveStatic({ root: path.resolve(import.meta.dirname, "../../frontend/dist") }));
-
-// Start Server
-const port = parseInt(process.env.PORT || "8000");
-
-// Check if we are being run directly
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.main) {
-  console.log(`Server starting on http://localhost:${port}`);
-  serve({ fetch: app.fetch, port });
-}
 
 export default app;
