@@ -160,26 +160,37 @@ export class OpencodeService {
       return;
     }
     
-    try {
-      let lastStatus = NaN;
-      while (retryCount-- > 0) {
+    let connected = false;
+    let lastStatus = NaN;
+    let lastError = "";
+
+    while (retryCount-- > 0) {
+      if (this.destroyed) return;
+      
+      try {
         const res = await fetch(`http://localhost:${this.port}/global/health`);
+        lastStatus = res.status;
         if (res.ok) {
           const data = await res.json();
-          if (data.healthy && this.state === "offline") {
-            // Force update to recalculate state based on current session statuses
-            // if any, otherwise default to idle
-            this.updateState(true);
+          if (data.healthy) {
+            connected = true;
+            if (this.state === "offline") {
+              // Force update to recalculate state based on current session statuses
+              // if any, otherwise default to idle
+              this.updateState(true);
+            }
             break;
           }
         }
-        lastStatus = res.status
-        await new Promise(r => setTimeout(r, retryDelay));
+      } catch (e: any) {
+        lastError = e.message;
+        // fetch failed, wait and retry
       }
-      console.log(`[OpencodeService] health check failed with status: ${lastStatus}`);
-    } catch (e: any) {
-      console.log(`[OpencodeService] health check fetch failed: ${e.message}`);
-      // fetch failed, wait and retry
+      await new Promise(r => setTimeout(r, retryDelay));
+    }
+
+    if (!connected) {
+      console.log(`[OpencodeService] health check failed. Last status: ${lastStatus}, Last error: ${lastError}`);
     }
 
     try {
