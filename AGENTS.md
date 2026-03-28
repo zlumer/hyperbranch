@@ -21,7 +21,7 @@ Don't add useless dependencies or complexity. Take the line count low.
 
 ```bash
 # CLI entrypoint
-./cli/hb.ts <command> <args>
+./cli/src/hb.ts <command> <args>
 ```
 
 ```bash
