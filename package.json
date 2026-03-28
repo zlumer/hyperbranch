@@ -4,8 +4,8 @@
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
   "bin": {
-    "hb": "./cli/dist/hb.js",
-    "hyperbranch": "./cli/dist/hb.js"
+    "hb": "cli/dist/hb.js",
+    "hyperbranch": "cli/dist/hb.js"
   },
   "scripts": {
     "test": "cd cli && npm run test",
@@ -17,6 +17,9 @@
     "claude",
     "opencode",
     "aider"
+  ],
+  "files": [
+    "/cli/dist/hb.js"
   ],
   "repository": {
     "type": "git",
