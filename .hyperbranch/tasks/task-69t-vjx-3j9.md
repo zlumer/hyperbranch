@@ -1,6 +1,6 @@
 ---
 task-id: 69t-vjx-3j9
-status: todo
+status: done
 ---
 
 # Basic CLI scaffolding
