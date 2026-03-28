@@ -1,13 +1,13 @@
 import * as Runs from "../services/runs.js";
 import { RunId } from "../utils/id.js";
-import { command, boolean, string, option, restPositionals } from "cmd-ts";
+import { command, boolean, string, option, restPositionals, flag } from "cmd-ts";
 
 export const mergeCmd = command({
   name: "merge",
   description: "Merge a task run",
   args: {
     strategy: option({ type: string, long: "strategy", defaultValue: () => "ff" }),
-    cleanup: option({ type: boolean, long: "cleanup", defaultValue: () => false }),
+    cleanup: flag({ type: boolean, long: "cleanup", defaultValue: () => false }),
     args: restPositionals({ type: string, displayName: "args" }),
   },
   handler: async ({ strategy, cleanup, args }) => {

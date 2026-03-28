@@ -1,7 +1,7 @@
 import * as Runs from "../services/runs.js";
 import { parseArgsString } from "../utils/args.js";
 import { TaskId } from "../utils/id.js";
-import { command, boolean, restPositionals, string, option } from "cmd-ts";
+import { command, boolean, restPositionals, string, option, flag } from "cmd-ts";
 
 export const runCmd = command({
   name: "run",
@@ -9,7 +9,7 @@ export const runCmd = command({
   args: {
     image: option({ type: string, long: "image", defaultValue: () => "" }),
     dockerfile: option({ type: string, long: "dockerfile", defaultValue: () => "" }),
-    commit: option({ type: boolean, long: "commit", defaultValue: () => false }),
+    commit: flag({ type: boolean, long: "commit", defaultValue: () => false }),
     exec: option({ type: string, long: "exec", defaultValue: () => "" }),
     execFile: option({ type: string, long: "exec-file", defaultValue: () => "" }),
     args: restPositionals({ type: string, displayName: "args" }),

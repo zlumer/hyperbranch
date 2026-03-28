@@ -1,13 +1,13 @@
 import * as Tasks from "../services/tasks.js";
 import { execa } from "execa";
-import { command, string, option, boolean, restPositionals } from "cmd-ts";
+import { command, string, option, boolean, restPositionals, flag } from "cmd-ts";
 
 export const createCmd = command({
   name: "create",
   description: "Create a new task",
   args: {
     parent: option({ type: string, long: "parent", short: "p", defaultValue: () => "" }),
-    edit: option({ type: boolean, long: "edit", defaultValue: () => false }),
+    edit: flag({ type: boolean, long: "edit", defaultValue: () => false }),
     titleParts: restPositionals({ type: string, displayName: "Task Title" }),
   },
   handler: async ({ parent, edit, titleParts }) => {

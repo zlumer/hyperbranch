@@ -1,13 +1,13 @@
 import * as Git from "../utils/git.js";
 import * as Runs from "../services/runs.js";
 import { RunId, TaskId } from "../utils/id.js";
-import { command, boolean, restPositionals, string, option } from "cmd-ts";
+import { command, boolean, restPositionals, string, flag } from "cmd-ts";
 
 export const logsCmd = command({
   name: "logs",
   description: "View logs for a task run",
   args: {
-    follow: option({ type: boolean, long: "follow", short: "f", defaultValue: () => false }),
+    follow: flag({ type: boolean, long: "follow", short: "f", defaultValue: () => false }),
     args: restPositionals({ type: string, displayName: "args" }),
   },
   handler: async ({ follow, args }) => {

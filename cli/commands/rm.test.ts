@@ -14,7 +14,7 @@ function mockCmd(
     { stdout?: string; stderr?: string; success: boolean; code?: number }
   >,
 ) {
-  return vi.mocked(execa).mockImplementation((cmd: string, args?: readonly string[], options?: any) => {
+  return vi.mocked(execa).mockImplementation((cmd: string | URL, args?: readonly string[], options?: any) => {
     const commandName = cmd;
 
     if (commandName !== "git" && commandName !== "docker") {

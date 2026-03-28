@@ -2,14 +2,14 @@ import * as Tasks from "../services/tasks.js";
 import * as Runs from "../services/runs.js";
 import * as Cleanup from "../services/cleanup.js";
 import { TaskId, RunId, parseTaskOrRunId, stripHbPrefix } from "../utils/id.js";
-import { command, boolean, restPositionals, string, option } from "cmd-ts";
+import { command, boolean, restPositionals, string, option, flag } from "cmd-ts";
 
 export const rmCmd = command({
   name: "rm",
   description: "Remove tasks or runs",
   args: {
-    sweep: option({ type: boolean, long: "sweep", defaultValue: () => false }),
-    force: option({ type: boolean, long: "force", short: "f", defaultValue: () => false }),
+    sweep: flag({ type: boolean, long: "sweep", defaultValue: () => false }),
+    force: flag({ type: boolean, long: "force", short: "f", defaultValue: () => false }),
     targets: restPositionals({ type: string, displayName: "targets" }),
   },
   handler: async ({ sweep, force, targets: rawTargets }) => {
