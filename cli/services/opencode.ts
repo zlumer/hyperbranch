@@ -20,7 +20,7 @@ export class OpencodeService {
   private sessionPermissions: Record<string, Set<string>> = {};
 
   private destroyed = false;
-  private reconnectTimeout: number | null = null;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private streamAbortController: AbortController | null = null;
 
   constructor(private port: number) {

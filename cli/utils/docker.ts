@@ -133,7 +133,7 @@ export async function getUserId(): Promise<string> {
 export async function getContainerIdByName(name: string): Promise<string | null> {
   try {
     const { stdout } = await dcmd(["inspect", "--format", "{{.Id}}", name])
-    return stdout.trim()
+    return stdout.trim() || null
   } catch {
     return null
   }
@@ -203,8 +203,10 @@ export const dockerCmd = (args: string[], opts: { cwd?: string, stdio?: "pipe" |
   })
 }
 
-const dcmd = (args: string[], opts: { cwd?: string, stdio?: "pipe" | "inherit" | "ignore", env?: Record<string, string> } = {}) => 
-  dockerCmd(args, opts)
+const dcmd = async (args: string[], opts: { cwd?: string, stdio?: "pipe" | "inherit" | "ignore", env?: Record<string, string> } = {}) => {
+  const result = await dockerCmd(args, opts)
+  return result as typeof result & { stdout: string; stderr: string }
+}
 
 export async function getContainerPort(cid: string, internalPort: number): Promise<number | null> {
   try {

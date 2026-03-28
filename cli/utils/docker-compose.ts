@@ -69,7 +69,7 @@ export async function isServiceRunningInProject(projectName: string, serviceName
       "--status", "running",
       serviceName
     ]);
-    const containerId = stdout.trim();
+    const containerId = stdout!.trim();
     return containerId.length > 0;
   } catch {
     return false;
@@ -79,7 +79,7 @@ export async function isServiceRunningInProject(projectName: string, serviceName
 export async function isRunningService(workdir: string, composeFilePath: string, serviceName = DEFAULT_SERVICE_NAME, projectName?: string): Promise<boolean> {
   try {
     const { stdout } = await composeCmd(["ps", "-q", "--status", "running", serviceName], workdir, composeFilePath, projectName);
-    const containerId = stdout.trim();
+    const containerId = stdout!.trim();
     return containerId.length > 0;
   } catch (e: any) {
     if (e.code === "ENOENT" || (e.stderr && e.stderr.includes("not found"))) {
@@ -95,7 +95,7 @@ export async function isRunningService(workdir: string, composeFilePath: string,
 export async function isRunningAny(workdir: string, composeFilePath: string, projectName?: string): Promise<boolean> {
   try {
     const { stdout } = await composeCmd(["ps", "-q"], workdir, composeFilePath, projectName);
-    const containerIds = stdout.trim().split("\n").filter(line => line.length > 0);
+    const containerIds = stdout!.trim().split("\n").filter(line => line.length > 0);
     return containerIds.length > 0;
   } catch (e: any) {
     if (e.code === "ENOENT" || (e.stderr && e.stderr.includes("not found"))) {
@@ -107,7 +107,7 @@ export async function isRunningAny(workdir: string, composeFilePath: string, pro
 
 export async function getServicePort(workdir: string, composeFilePath: string, serviceName: string, containerPort: number, projectName?: string): Promise<number> {
   const { stdout } = await composeCmd(["port", serviceName, String(containerPort)], workdir, composeFilePath, projectName);
-  return parseInt(stdout.trim(), 10);
+  return parseInt(stdout!.trim(), 10);
 }
 
 export async function getServiceContainerId(
@@ -118,7 +118,7 @@ export async function getServiceContainerId(
 ): Promise<string | null> {
   try {
     const { stdout } = await composeCmd(["ps", "-q", "-a", serviceName], workdir, composeFilePath, projectName);
-    const id = stdout.trim();
+    const id = stdout!.trim();
     return id.length > 0 ? id : null;
   } catch {
     return null;
@@ -133,7 +133,7 @@ export async function getServiceHostPort(
   projectName?: string
 ): Promise<number> {
   const { stdout } = await composeCmd(["port", serviceName, String(containerPort)], workdir, composeFilePath, projectName);
-  const text = stdout.trim();
+  const text = stdout!.trim();
   
   if (!text) throw new Error("Service port not found");
   

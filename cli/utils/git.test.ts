@@ -9,11 +9,12 @@ vi.mock("execa", () => ({
 
 // Mock execa to avoid actual git execution
 function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, success: boolean }>) {
-  return vi.mocked(execaModule.execa).mockImplementation((cmd, args, options) => {
+  return vi.mocked(execaModule.execa).mockImplementation(((cmd: string | URL, argsOrOptions?: readonly string[] | execaModule.Options, options?: execaModule.Options) => {
     if (cmd !== "git") {
       throw new Error(`Unexpected command: ${cmd}`);
     }
-    const key = (args || []).join(" ");
+    const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+    const key = args.join(" ");
     
     let result = outputs[key];
     
@@ -27,20 +28,20 @@ function mockGit(outputs: Record<string, { stdout?: string, stderr?: string, suc
     }
 
     if (!result) {
-      return Promise.reject(new Error(`Unmocked command: ${key}`)) as any;
+      return Promise.reject(new Error(`Unmocked command: ${key}`));
     }
 
     if (!result.success) {
-      const error: any = new Error(result.stderr || "");
+      const error = new Error(result.stderr || "") as Error & { stderr: string };
       error.stderr = result.stderr || "";
-      return Promise.reject(error) as any;
+      return Promise.reject(error);
     }
 
     return Promise.resolve({
       stdout: result.stdout || "",
       stderr: result.stderr || ""
-    }) as any;
-  });
+    }) as unknown as execaModule.ResultPromise;
+  }) as unknown as typeof execaModule.execa);
 }
 
 describe("Git utils", () => {

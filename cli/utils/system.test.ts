@@ -12,13 +12,14 @@ vi.mock("execa", () => {
 })
 
 function mockPkgManagers(outputs: Record<string, string>) {
-  return vi.mocked(execaModule.execa).mockImplementation((cmd, args) => {
-    const fullCmd = [cmd, ...(args || [])].join(" ");
+  return vi.mocked(execaModule.execa).mockImplementation(((cmd: string | URL, argsOrOptions?: readonly string[] | execaModule.Options) => {
+    const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
+    const fullCmd = [cmd, ...args].join(" ");
     if (outputs[fullCmd]) {
-      return Promise.resolve({ stdout: outputs[fullCmd] }) as any;
+      return Promise.resolve({ stdout: outputs[fullCmd] }) as unknown as execaModule.ResultPromise;
     }
     return Promise.reject(new Error("Command not found"));
-  })
+  }) as unknown as typeof execaModule.execa);
 }
 
 describe("System utils", () => {

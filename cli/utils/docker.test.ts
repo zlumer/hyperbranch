@@ -15,7 +15,7 @@ describe("Docker utils", () => {
   });
 
   it("buildImage - calls docker build", async () => {
-    const execaMock = vi.mocked(execaModule.execa).mockResolvedValue({ stdout: "" } as any);
+    const execaMock = vi.mocked(execaModule.execa).mockResolvedValue({ stdout: "" } as unknown as Awaited<ReturnType<typeof execaModule.execa>>);
 
     await Docker.buildImage("Dockerfile.test", "test-tag");
     expect(execaMock).toHaveBeenCalledTimes(1);
@@ -37,13 +37,13 @@ describe("Docker utils", () => {
     }
 
     const execaMock = vi.mocked(execaModule.execa).mockImplementation((cmd, args) => {
-        if (args && args[0] === "-u") {
-            return Promise.resolve({ stdout: "1001\n" }) as any;
+        if (Array.isArray(args) && args[0] === "-u") {
+            return Promise.resolve({ stdout: "1001\n" }) as unknown as ReturnType<typeof execaModule.execa>;
         }
-        if (args && args[0] === "-g") {
-            return Promise.resolve({ stdout: "1002\n" }) as any;
+        if (Array.isArray(args) && args[0] === "-g") {
+            return Promise.resolve({ stdout: "1002\n" }) as unknown as ReturnType<typeof execaModule.execa>;
         }
-        return Promise.reject(new Error("Command not found")) as any;
+        return Promise.reject(new Error("Command not found")) as unknown as ReturnType<typeof execaModule.execa>;
     });
 
     const id = await Docker.getUserId();
