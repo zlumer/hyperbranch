@@ -172,7 +172,7 @@ export class OpencodeService {
         lastStatus = res.status;
         if (res.ok) {
           const data = await res.json();
-          if (data.healthy) {
+          if (data && (typeof data == "object") && "healthy" in data && data.healthy) {
             connected = true;
             if (this.state === "offline") {
               // Force update to recalculate state based on current session statuses

@@ -5,6 +5,7 @@ import { command } from "cmd-ts";
 import { isGitRepository, getRootGitDir } from "../utils/git.js";
 import * as git from "../utils/git.js"
 import { RUNS_DIR, TASKS_DIR } from "../utils/paths.js";
+import { confirm, prompt } from "@deno/shim-prompts";
 
 const GITIGNORE_CONTENTS = `.env
 .env.*
@@ -55,7 +56,7 @@ async function validateGoogleApiKey(apiKey: string): Promise<"valid" | "invalid"
         continue
       }
 
-      const data = await response.json()
+      const data = await response.json() as any
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ""
       
       if (!text.toLowerCase().includes("john")) {

@@ -2,6 +2,12 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fsPromises from "node:fs/promises";
 import { join } from "node:path";
 import app from "../server/main.js";
+import z from "zod";
+
+const TaskSchema = z.object({
+	id: z.string(),
+	body: z.string(),
+});
 
 describe.sequential("Server Integration Tests", () => {
     const API_KEY = process.env.HB_API_KEY || "test-api-key";
@@ -32,7 +38,7 @@ describe.sequential("Server Integration Tests", () => {
         expect(res.status).toBe(200);
         const tasks = await res.json();
         expect(Array.isArray(tasks)).toBe(true);
-        expect(tasks.length).toBe(0);
+        expect(tasks).toHaveLength(0);
     });
 
     it("POST /tasks - create a task", async () => {
@@ -45,7 +51,7 @@ describe.sequential("Server Integration Tests", () => {
             body: JSON.stringify({ title: "Test Task" }),
         });
         expect(res.status).toBe(201);
-        const task = await res.json();
+        const task = TaskSchema.parse(await res.json());
         expect(task.id).toBeDefined();
         
         createdTaskId = task.id;
@@ -57,8 +63,8 @@ describe.sequential("Server Integration Tests", () => {
             headers: { "X-API-Key": API_KEY },
         });
         expect(res.status).toBe(200);
-        const tasks = await res.json();
-        expect(tasks.length).toBe(1);
+        const tasks = z.array(TaskSchema).parse(await res.json());
+        expect(tasks).toHaveLength(1);
         expect(tasks[0].id).toBe(createdTaskId);
     });
 
@@ -67,7 +73,7 @@ describe.sequential("Server Integration Tests", () => {
             headers: { "X-API-Key": API_KEY },
         });
         expect(res.status).toBe(200);
-        const task = await res.json();
+        const task = TaskSchema.parse(await res.json());
         expect(task.id).toBe(createdTaskId);
     });
     
@@ -76,7 +82,9 @@ describe.sequential("Server Integration Tests", () => {
             headers: { "X-API-Key": API_KEY },
         });
         expect(res.status).toBe(404);
-        const data = await res.json();
+        const data = z.object({
+            error: z.string(),
+        }).parse(await res.json());
         expect(data.error.includes("does not exist")).toBe(true);
     });
 
@@ -86,7 +94,9 @@ describe.sequential("Server Integration Tests", () => {
             headers: { "X-API-Key": API_KEY },
         });
         expect(res.status).toBe(200);
-        const data = await res.json();
+        const data = z.object({
+            message: z.string(),
+        }).parse(await res.json());
         expect(data.message).toBe("Run removed");
     });
 });
