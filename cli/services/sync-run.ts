@@ -1,12 +1,12 @@
 import fs from "node:fs";
 const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
-import * as Git from "../utils/git.ts";
-import * as Docker from "../utils/docker.ts";
-import * as Compose from "../utils/docker-compose.ts";
-import { getRunContext } from "../runtime/context.ts";
-import { RunId } from "../utils/id.ts";
-import { getOpencodeService } from "./opencode.ts";
-import { getHostPort } from "./runs.ts";
+import * as Git from "../utils/git.js";
+import * as Docker from "../utils/docker.js";
+import * as Compose from "../utils/docker-compose.js";
+import { getRunContext } from "../runtime/context.js";
+import { RunId } from "../utils/id.js";
+import { getOpencodeService } from "./opencode.js";
+import { getHostPort } from "./runs.js";
 
 export async function syncRun(run: RunId): Promise<void> {
   const ctx = getRunContext(run);

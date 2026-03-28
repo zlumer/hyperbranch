@@ -1,4 +1,4 @@
-import { TaskId, RunId } from "../../../../../utils/id.ts"
+import { TaskId, RunId } from "../../../../../utils/id.js"
 
 export function parseRouteIds(idStr: string, runIdStr: string) {
   const taskId = TaskId.from(idStr)

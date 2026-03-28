@@ -1,12 +1,12 @@
 import { join } from "node:path";
 import fs from "node:fs";
 const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
-import * as Git from "../utils/git.ts";
-import * as GitClones from "../utils/git-clones.ts";
-import * as Docker from "../utils/docker.ts";
-import * as Runs from "./runs.ts";
-import { RUNS_DIR } from "../utils/paths.ts";
-import { TaskId, RunId } from "../utils/id.ts";
+import * as Git from "../utils/git.js";
+import * as GitClones from "../utils/git-clones.js";
+import * as Docker from "../utils/docker.js";
+import * as Runs from "./runs.js";
+import { RUNS_DIR } from "../utils/paths.js";
+import { TaskId, RunId } from "../utils/id.js";
 
 export async function sweep() {
   const runsDir = RUNS_DIR();

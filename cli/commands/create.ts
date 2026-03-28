@@ -1,4 +1,4 @@
-import * as Tasks from "../services/tasks.ts";
+import * as Tasks from "../services/tasks.js";
 import { execa } from "execa";
 import { command, string, option, boolean, restPositionals } from "cmd-ts";
 

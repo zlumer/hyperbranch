@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { join } from "node:path";
-import { create as createTask } from "../services/tasks.ts";
+import { create as createTask } from "../services/tasks.js";
 import { command } from "cmd-ts";
 import { isGitRepository, getRootGitDir } from "../utils/git.js";
 import * as git from "../utils/git.js"

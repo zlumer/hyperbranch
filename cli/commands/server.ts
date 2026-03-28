@@ -1,4 +1,4 @@
-import app, { ensureApiKey } from "../server/main.ts";
+import app, { ensureApiKey } from "../server/main.js";
 import { command, string, option } from "cmd-ts";
 import { serve } from "@hono/node-server";
 

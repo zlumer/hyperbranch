@@ -1,7 +1,7 @@
 import { join } from "node:path"
 import { readdir } from "node:fs/promises"
-import { TASKS_DIR } from "./paths.ts"
-import { TaskId } from "./id.ts";
+import { TASKS_DIR } from "./paths.js"
+import { TaskId } from "./id.js";
 
 // --- ID Generation ---
 export function generateTaskId(): string

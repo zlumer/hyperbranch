@@ -1,5 +1,5 @@
-import { loadTask as defaultLoadTask } from "./loadTask.ts"
-import { TaskFile } from "../types.ts"
+import { loadTask as defaultLoadTask } from "./loadTask.js"
+import { TaskFile } from "../types.js"
 
 // --- Cycle Detection ---
 

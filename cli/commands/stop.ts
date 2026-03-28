@@ -1,5 +1,5 @@
-import * as Runs from "../services/runs.ts";
-import { parseTaskOrRunId, RunId } from "../utils/id.ts";
+import * as Runs from "../services/runs.js";
+import { parseTaskOrRunId, RunId } from "../utils/id.js";
 import { command, string, restPositionals } from "cmd-ts";
 
 export const stopCmd = command({

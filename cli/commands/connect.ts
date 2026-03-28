@@ -1,6 +1,6 @@
-import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.ts";
-import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.ts";
-import { TaskId } from "../utils/id.ts";
+import { detectDependencyCycle, detectParentCycle } from "../utils/cycles.js";
+import { loadTask, checkTaskExists, saveTask } from "../utils/loadTask.js";
+import { TaskId } from "../utils/id.js";
 import { command, string, option, positional } from "cmd-ts";
 
 export const connectCmd = command({

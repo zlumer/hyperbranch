@@ -1,6 +1,6 @@
-import * as Tasks from "../services/tasks.ts";
-import { TaskStatus } from "../types.ts";
-import { TaskId } from "../utils/id.ts";
+import * as Tasks from "../services/tasks.js";
+import { TaskStatus } from "../types.js";
+import { TaskId } from "../utils/id.js";
 import { command, string, option, positional } from "cmd-ts";
 
 export const moveCmd = command({

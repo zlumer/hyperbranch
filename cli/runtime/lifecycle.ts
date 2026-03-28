@@ -2,12 +2,12 @@ import fs from "node:fs";
 const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
 const copyDir = async (src: string, dest: string, opts: any) => await fs.promises.cp(src, dest, { recursive: true, force: opts.overwrite });
 import { join } from "node:path";
-import * as Git from "../utils/git.ts";
-import * as GitClones from "../utils/git-clones.ts";
-import * as Docker from "../utils/docker.ts";
-import * as Compose from "../utils/docker-compose.ts";
-import { RunContext, RunState } from "./types.ts";
-import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
+import * as Git from "../utils/git.js";
+import * as GitClones from "../utils/git-clones.js";
+import * as Docker from "../utils/docker.js";
+import * as Compose from "../utils/docker-compose.js";
+import { RunContext, RunState } from "./types.js";
+import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.js";
 
 export interface PrepareOptions {
   prompt?: string;

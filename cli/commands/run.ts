@@ -1,6 +1,6 @@
-import * as Runs from "../services/runs.ts";
-import { parseArgsString } from "../utils/args.ts";
-import { TaskId } from "../utils/id.ts";
+import * as Runs from "../services/runs.js";
+import { parseArgsString } from "../utils/args.js";
+import { TaskId } from "../utils/id.js";
 import { command, boolean, restPositionals, string, option } from "cmd-ts";
 
 export const runCmd = command({

@@ -1,6 +1,6 @@
-import * as Tasks from "../services/tasks.ts";
-import * as Runs from "../services/runs.ts";
-import { TaskId } from "../utils/id.ts";
+import * as Tasks from "../services/tasks.js";
+import * as Runs from "../services/runs.js";
+import { TaskId } from "../utils/id.js";
 import { command } from "cmd-ts";
 
 export const psCmd = command({

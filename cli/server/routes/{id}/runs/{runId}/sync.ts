@@ -1,9 +1,9 @@
-import { os } from "../../../../os.ts";
+import { os } from "../../../../os.js";
 import { z } from "zod";
-import * as Runs from "../../../../../services/runs.ts";
-import { syncRun } from "../../../../../services/sync-run.ts";
+import * as Runs from "../../../../../services/runs.js";
+import { syncRun } from "../../../../../services/sync-run.js";
 import { ORPCError } from "@orpc/server";
-import { parseRouteIds } from "./utils.ts";
+import { parseRouteIds } from "./utils.js";
 
 export const post = os
   .input(

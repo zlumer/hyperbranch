@@ -1,6 +1,6 @@
-import * as Git from "../utils/git.ts";
-import * as Runs from "../services/runs.ts";
-import { RunId, TaskId } from "../utils/id.ts";
+import * as Git from "../utils/git.js";
+import * as Runs from "../services/runs.js";
+import { RunId, TaskId } from "../utils/id.js";
 import { command, boolean, restPositionals, string, option } from "cmd-ts";
 
 export const logsCmd = command({

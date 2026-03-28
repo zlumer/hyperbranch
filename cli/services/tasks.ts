@@ -1,10 +1,10 @@
-import { TaskFile, TaskFrontmatter, TaskStatus } from "../types.ts"
-import { generateTaskId, getTaskPath, scanTasks } from "../utils/tasks.ts"
-import { checkTaskExists, loadTask, saveTask } from "../utils/loadTask.ts"
-import * as Git from "../utils/git.ts"
-import * as Docker from "../utils/docker.ts"
-import * as Runs from "./runs.ts"
-import { TaskId } from "../utils/id.ts"
+import { TaskFile, TaskFrontmatter, TaskStatus } from "../types.js"
+import { generateTaskId, getTaskPath, scanTasks } from "../utils/tasks.js"
+import { checkTaskExists, loadTask, saveTask } from "../utils/loadTask.js"
+import * as Git from "../utils/git.js"
+import * as Docker from "../utils/docker.js"
+import * as Runs from "./runs.js"
+import { TaskId } from "../utils/id.js"
 import fs from "node:fs"
 
 /**

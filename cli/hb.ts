@@ -1,21 +1,21 @@
 #!/usr/bin/env -S npx -y tsx
 import fs from "node:fs/promises";
-import { HYPERBRANCH_DIR, RUNS_DIR, TASKS_DIR, TASKS_DIR_NAME } from "./utils/paths.ts";
+import { HYPERBRANCH_DIR, RUNS_DIR, TASKS_DIR, TASKS_DIR_NAME } from "./utils/paths.js";
 import { subcommands, run } from "cmd-ts";
 
-import { createCmd } from "./commands/create.ts";
-import { connectCmd } from "./commands/connect.ts";
-import { moveCmd } from "./commands/move.ts";
-import { runCmd } from "./commands/run.ts";
-import { logsCmd } from "./commands/logs.ts";
-import { stopCmd } from "./commands/stop.ts";
-import { psCmd } from "./commands/ps.ts";
-import { rmCmd } from "./commands/rm.ts";
-import { serverCmd } from "./commands/server.ts";
-import { portCmd } from "./commands/port.ts";
-import { mergeCmd } from "./commands/merge.ts";
-import { syncCmd } from "./commands/sync.ts";
-import { initCmd } from "./commands/init.ts";
+import { createCmd } from "./commands/create.js";
+import { connectCmd } from "./commands/connect.js";
+import { moveCmd } from "./commands/move.js";
+import { runCmd } from "./commands/run.js";
+import { logsCmd } from "./commands/logs.js";
+import { stopCmd } from "./commands/stop.js";
+import { psCmd } from "./commands/ps.js";
+import { rmCmd } from "./commands/rm.js";
+import { serverCmd } from "./commands/server.js";
+import { portCmd } from "./commands/port.js";
+import { mergeCmd } from "./commands/merge.js";
+import { syncCmd } from "./commands/sync.js";
+import { initCmd } from "./commands/init.js";
 import path from "node:path";
 import { getRootGitDir, hasGitBinary, isGitRepository } from "./utils/git.js";
 

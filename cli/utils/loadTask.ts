@@ -1,7 +1,7 @@
 import { access, readFile, writeFile } from "node:fs/promises"
 import { stringify as stringifyYaml, parse as parseYaml } from "yaml"
-import { TaskFile, TaskFrontmatter } from "../types.ts"
-import { getTaskPath } from "./tasks.ts"
+import { TaskFile, TaskFrontmatter } from "../types.js"
+import { getTaskPath } from "./tasks.js"
 
 async function exists(path: string): Promise<boolean> {
   try {

@@ -1,5 +1,5 @@
-import * as Runs from "../services/runs.ts";
-import { RunId } from "../utils/id.ts";
+import * as Runs from "../services/runs.js";
+import { RunId } from "../utils/id.js";
 import { command, string, positional } from "cmd-ts";
 
 export const portCmd = command({

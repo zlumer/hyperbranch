@@ -1,8 +1,8 @@
-import { os } from "../../os.ts"
+import { os } from "../../os.js"
 import { z } from "zod"
-import * as Tasks from "../../../services/tasks.ts"
-import { TaskId } from "../../../utils/id.ts"
-import { TaskStatus } from "../../../types.ts"
+import * as Tasks from "../../../services/tasks.js"
+import { TaskId } from "../../../utils/id.js"
+import { TaskStatus } from "../../../types.js"
 import { ORPCError } from "@orpc/server"
 
 const TaskStatusSchema = z.enum(["todo", "plan", "build", "review", "done", "cancelled"])

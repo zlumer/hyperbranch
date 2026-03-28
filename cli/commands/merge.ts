@@ -1,5 +1,5 @@
-import * as Runs from "../services/runs.ts";
-import { RunId } from "../utils/id.ts";
+import * as Runs from "../services/runs.js";
+import { RunId } from "../utils/id.js";
 import { command, boolean, string, option, restPositionals } from "cmd-ts";
 
 export const mergeCmd = command({

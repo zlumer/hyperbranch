@@ -1,6 +1,6 @@
 import { parse, stringify } from 'yaml'
-import { dockerCmd } from "./docker.ts"
-import { DockerComposeSchema } from "./docker-compose.schema.ts"
+import { dockerCmd } from "./docker.js"
+import { DockerComposeSchema } from "./docker-compose.schema.js"
 
 export const DEFAULT_SERVICE_NAME = "hyperbranch-run"
 

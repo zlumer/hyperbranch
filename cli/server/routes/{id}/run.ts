@@ -1,9 +1,9 @@
-import { os } from "../../os.ts"
+import { os } from "../../os.js"
 import { z } from "zod"
-import * as Runs from "../../../services/runs.ts"
-import { TaskId, RunId } from "../../../utils/id.ts"
+import * as Runs from "../../../services/runs.js"
+import { TaskId, RunId } from "../../../utils/id.js"
 import { ORPCError } from "@orpc/server"
-import { getOpencodeService } from "../../../services/opencode.ts"
+import { getOpencodeService } from "../../../services/opencode.js"
 
 export const post = os
   .input(z.object({

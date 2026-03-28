@@ -1,6 +1,6 @@
-import { os } from "../os.ts"
+import { os } from "../os.js"
 import { z } from "zod"
-import * as Tasks from "../../services/tasks.ts"
+import * as Tasks from "../../services/tasks.js"
 
 export const get = os
   .handler(async () => {

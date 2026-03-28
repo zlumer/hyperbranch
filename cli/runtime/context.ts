@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
-import { getRunDir as getRunDirFromClone, RUNS_DIR, TASKS_DIR } from "../utils/paths.ts";
-import { RunContext } from "./types.ts";
-import { RunId } from "../utils/id.ts";
+import { getRunDir as getRunDirFromClone, RUNS_DIR, TASKS_DIR } from "../utils/paths.js";
+import { RunContext } from "./types.js";
+import { RunId } from "../utils/id.js";
 
 export function getRunContext(run: RunId): RunContext
 {

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-import { authMiddleware } from "./middleware/auth.ts";
-import { errorHandler } from "./middleware/errorHandler.ts";
-import { corsMiddleware } from "./middleware/cors.ts";
-import { router } from "./router.ts";
+import { authMiddleware } from "./middleware/auth.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { corsMiddleware } from "./middleware/cors.js";
+import { router } from "./router.js";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { ZodSmartCoercionPlugin } from "@orpc/zod";
 import { ORPCError } from "@orpc/server";

@@ -1,6 +1,6 @@
-import { RunId, TaskId } from "./id.ts";
-import { loadTask } from "./loadTask.ts";
-import { getTaskPath } from "./tasks.ts";
+import { RunId, TaskId } from "./id.js";
+import { loadTask } from "./loadTask.js";
+import { getTaskPath } from "./tasks.js";
 import { execa } from "execa";
 
 // Helper to run git command

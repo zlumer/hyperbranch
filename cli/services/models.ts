@@ -1,10 +1,10 @@
-import { TaskId } from "../utils/id.ts";
-import * as GitClones from "../utils/git-clones.ts";
-import * as Git from "../utils/git.ts";
-import * as Docker from "../utils/docker.ts";
+import { TaskId } from "../utils/id.js";
+import * as GitClones from "../utils/git-clones.js";
+import * as Git from "../utils/git.js";
+import * as Docker from "../utils/docker.js";
 import { join } from "node:path";
 import { execa } from "execa";
-import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.ts";
+import { HYPERBRANCH_DIR, TASKS_DIR_NAME } from "../utils/paths.js";
 
 let cachedModels: string[] | null = null;
 let isFetching = false;

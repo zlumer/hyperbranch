@@ -1,14 +1,14 @@
 import fs from "node:fs";
 const exists = async (p: string) => fs.promises.access(p).then(()=>true).catch(()=>false);
-import * as Git from "../utils/git.ts";
-import * as GitClones from "../utils/git-clones.ts";
-import * as Lifecycle from "../runtime/lifecycle.ts";
-import * as Docker from "../utils/docker.ts";
-import * as Compose from "../utils/docker-compose.ts";
-import { getRunContext } from "../runtime/context.ts";
-import { destroyOpencodeService } from "./opencode.ts";
-import { RunId, TaskId } from "../utils/id.ts";
-import { RUNS_DIR } from "../utils/paths.ts";
+import * as Git from "../utils/git.js";
+import * as GitClones from "../utils/git-clones.js";
+import * as Lifecycle from "../runtime/lifecycle.js";
+import * as Docker from "../utils/docker.js";
+import * as Compose from "../utils/docker-compose.js";
+import { getRunContext } from "../runtime/context.js";
+import { destroyOpencodeService } from "./opencode.js";
+import { RunId, TaskId } from "../utils/id.js";
+import { RUNS_DIR } from "../utils/paths.js";
 
 export interface RunOptions extends Lifecycle.PrepareOptions {}
 

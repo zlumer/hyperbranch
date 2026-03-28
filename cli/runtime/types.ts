@@ -1,4 +1,4 @@
-import { RunId } from "../utils/id.ts"
+import { RunId } from "../utils/id.js"
 
 export type RunState =
   | "unknown"    // No trace of the run found

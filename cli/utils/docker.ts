@@ -2,7 +2,7 @@ import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { copyFile, mkdir, writeFile, chmod, access } from "node:fs/promises"
 import { execa } from "execa"
-import { HYPERBRANCH_DIR } from "./paths.ts"
+import { HYPERBRANCH_DIR } from "./paths.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

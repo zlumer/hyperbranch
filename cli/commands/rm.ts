@@ -1,7 +1,7 @@
-import * as Tasks from "../services/tasks.ts";
-import * as Runs from "../services/runs.ts";
-import * as Cleanup from "../services/cleanup.ts";
-import { TaskId, RunId, parseTaskOrRunId, stripHbPrefix } from "../utils/id.ts";
+import * as Tasks from "../services/tasks.js";
+import * as Runs from "../services/runs.js";
+import * as Cleanup from "../services/cleanup.js";
+import { TaskId, RunId, parseTaskOrRunId, stripHbPrefix } from "../utils/id.js";
 import { command, boolean, restPositionals, string, option } from "cmd-ts";
 
 export const rmCmd = command({

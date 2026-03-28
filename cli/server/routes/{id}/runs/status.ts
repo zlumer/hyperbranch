@@ -1,7 +1,7 @@
-import { os } from "../../../os.ts"
+import { os } from "../../../os.js"
 import { z } from "zod"
-import * as Runs from "../../../../services/runs.ts"
-import { TaskId } from "../../../../utils/id.ts"
+import * as Runs from "../../../../services/runs.js"
+import { TaskId } from "../../../../utils/id.js"
 import { ORPCError } from "@orpc/server"
 
 export const get = os

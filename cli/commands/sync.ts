@@ -1,5 +1,5 @@
-import { RunId } from "../utils/id.ts";
-import { syncRun } from "../services/sync-run.ts";
+import { RunId } from "../utils/id.js";
+import { syncRun } from "../services/sync-run.js";
 import { command, string, positional } from "cmd-ts";
 
 export const syncCmd = command({

@@ -1,6 +1,6 @@
-import { git } from "./git.ts";
+import { git } from "./git.js";
 import { access, rm } from "node:fs/promises";
-import { RunId } from "./id.ts";
+import { RunId } from "./id.js";
 
 async function exists(path: string): Promise<boolean> {
   try {
