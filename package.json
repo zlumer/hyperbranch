@@ -3,8 +3,13 @@
   "version": "0.0.2",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
+  "bin": {
+    "hb": "./cli/dist/hb.js",
+    "hyperbranch": "./cli/dist/hb.js"
+  },
   "scripts": {
-    "test": "cd cli && npm run test"
+    "test": "cd cli && npm run test",
+    "build": "cd cli && npm run build"
   },
   "keywords": [
     "ai",
