@@ -2,9 +2,10 @@ import * as pty from 'node-pty';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { chmod } from 'node:fs/promises';
 
 export interface BwrapOptions {
-  cwd?: string; // relative to /workspace
+  cwd?: string; // relative to workspace
   mockFetch?: boolean;
   shareNet?: boolean;
   withoutGit?: boolean;
@@ -21,6 +22,7 @@ export class BwrapRunner {
   private ptyProcess?: pty.IPty;
   private output = '';
   private exitCodePromise!: Promise<number>;
+  private hasExited = false;
 
   async setup() {
     this.workspacePath = await mkdtemp(join(tmpdir(), 'hb-test-'));
@@ -34,29 +36,18 @@ export class BwrapRunner {
   }
 
   async runCLI(args: string[], options: BwrapOptions = {}): Promise<void> {
-    const bwrapArgs = [
-      '--ro-bind', '/', '/',
-      '--bind', this.workspacePath, '/workspace',
-      '--unshare-all',
-      '--dev', '/dev',
-      '--proc', '/proc'
-    ];
-
-    if (options.shareNet !== false) {
-      bwrapArgs.push('--share-net');
-    }
-
-    if (options.withoutGit) {
-      bwrapArgs.push('--ro-bind', '/dev/null', '/usr/bin/git');
-    }
-
-    const targetCwd = options.cwd ? join('/workspace', options.cwd) : '/workspace';
-    bwrapArgs.push('--chdir', targetCwd);
-
+    const targetCwd = options.cwd ? join(this.workspacePath, options.cwd) : this.workspacePath;
     const env = { ...process.env, ...options.env };
     
-    // We need to pass required env vars like PATH for node to run correctly inside bwrap
-    if (!env.PATH) env.PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+    if (options.withoutGit) {
+      // create a fake git that fails
+      const fakeBinDir = join(this.workspacePath, '.fake-bin');
+      await mkdir(fakeBinDir, { recursive: true });
+      const fakeGit = join(fakeBinDir, 'git');
+      await writeFile(fakeGit, '#!/bin/sh\necho "git: command not found" >&2\nexit 127\n');
+      await chmod(fakeGit, 0o755);
+      env.PATH = `${fakeBinDir}:${env.PATH || ''}`;
+    }
 
     const mockPromptCode = `
       import fs from 'fs';
@@ -84,9 +75,11 @@ export class BwrapRunner {
         return p.toLowerCase() === 'y';
       };
     `;
-    await writeFile(join(this.workspacePath, 'mock-prompt.js'), mockPromptCode);
+    const promptPath = join(this.workspacePath, 'mock-prompt.js');
+    await writeFile(promptPath, mockPromptCode);
     let nodeOptions = env.NODE_OPTIONS || '';
-    nodeOptions = `${nodeOptions} --import /workspace/mock-prompt.js`.trim();
+    // on Windows we would need to be careful with paths, but we are on Linux
+    nodeOptions = `${nodeOptions} --import ${promptPath}`.trim();
 
     if (options.mockFetch) {
       const mockCode = `
@@ -100,22 +93,31 @@ export class BwrapRunner {
           return originalFetch(url, options);
         };
       `;
-      await writeFile(join(this.workspacePath, 'mock-fetch.js'), mockCode);
-      nodeOptions = `${nodeOptions} --import /workspace/mock-fetch.js`.trim();
+      const fetchPath = join(this.workspacePath, 'mock-fetch.js');
+      await writeFile(fetchPath, mockCode);
+      nodeOptions = `${nodeOptions} --import ${fetchPath}`.trim();
     }
     
+    if (options.shareNet === false) {
+      const noNetCode = `
+        globalThis.fetch = async () => { throw new TypeError('fetch failed'); };
+      `;
+      const noNetPath = join(this.workspacePath, 'no-net.js');
+      await writeFile(noNetPath, noNetCode);
+      nodeOptions = `${nodeOptions} --import ${noNetPath}`.trim();
+    }
+
     if (nodeOptions) {
-      bwrapArgs.push('--setenv', 'NODE_OPTIONS', nodeOptions);
+      env.NODE_OPTIONS = nodeOptions;
     }
 
     const distHb = join(process.cwd(), 'dist/hb.js');
-    bwrapArgs.push('node', distHb, ...args);
 
-    this.ptyProcess = pty.spawn('bwrap', bwrapArgs, {
+    this.ptyProcess = pty.spawn(process.execPath, [distHb, ...args], {
       name: 'xterm-color',
       cols: 80,
       rows: 30,
-      cwd: this.workspacePath,
+      cwd: targetCwd,
       env: env as Record<string, string>,
     });
 
@@ -125,6 +127,7 @@ export class BwrapRunner {
 
     this.exitCodePromise = new Promise((resolve) => {
       this.ptyProcess!.onExit((e) => {
+        this.hasExited = true;
         const code = e.exitCode !== undefined ? e.exitCode : (e.signal ? 1 : 0);
         resolve(code);
       });
@@ -136,6 +139,9 @@ export class BwrapRunner {
     while (Date.now() - start < timeoutMs) {
       if (this.output.includes(expected)) {
         return;
+      }
+      if (this.hasExited && !this.output.includes(expected)) {
+        throw new Error(`Process exited before output "${expected}" was seen. Final output: ${this.output}`);
       }
       await new Promise(r => setTimeout(r, 50));
     }
@@ -151,8 +157,9 @@ export class BwrapRunner {
     const start = Date.now();
     let exitCode: number | undefined;
     
+    let timeoutId: NodeJS.Timeout;
     const timeoutPromise = new Promise<number>((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout waiting for process to exit')), timeoutMs);
+      timeoutId = setTimeout(() => reject(new Error('Timeout waiting for process to exit')), timeoutMs);
     });
 
     try {
@@ -160,6 +167,8 @@ export class BwrapRunner {
     } catch (e) {
       if (this.ptyProcess) this.ptyProcess.kill();
       throw e;
+    } finally {
+      clearTimeout(timeoutId!);
     }
 
     return {
