@@ -88,13 +88,6 @@ export const initCmd = command({
     const gitRoot = await getRootGitDir()
     
     if (gitRoot && gitRoot !== originalCwd) {
-      if (await exists(join(originalCwd, ".hyperbranch"))) {
-        const shouldProceed = confirm(".hyperbranch directory already exists. Do you want to proceed and potentially overwrite files?")
-        if (!shouldProceed) {
-          console.log("Aborting init.")
-          process.exit(0)
-        }
-      }
       console.warn(`Warning: The current directory is not the git root. Proceeding with the root directory: ${gitRoot}`)
     }
 
@@ -134,8 +127,8 @@ export const initCmd = command({
       break
     }
 
-    await fs.mkdir(TASKS_DIR(hyperbranchDir), { recursive: true })
-    await fs.mkdir(RUNS_DIR(hyperbranchDir), { recursive: true })
+    await fs.mkdir(TASKS_DIR(process.cwd()), { recursive: true })
+    await fs.mkdir(RUNS_DIR(process.cwd()), { recursive: true })
 
     await fs.writeFile(join(hyperbranchDir, ".gitignore"), GITIGNORE_CONTENTS)
     await fs.writeFile(join(hyperbranchDir, ".env.run"), ENV_RUN_CONTENTS(apiKey))
