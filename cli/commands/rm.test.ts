@@ -14,12 +14,16 @@ function mockCmd(
     { stdout?: string; stderr?: string; success: boolean; code?: number }
   >,
 ) {
-  return vi.mocked(execa).mockImplementation((cmd: string | URL, args?: readonly string[], options?: any) => {
+  return vi.mocked(execa<{cwd?: string}>).mockImplementation((cmd, args, options?: { cwd?: string }) => {
     const commandName = cmd;
 
     if (commandName !== "git" && commandName !== "docker") {
       throw new Error(`Unexpected command: ${commandName}`);
     }
+
+	if (args && !Array.isArray(args)) {
+	  throw new Error(`Expected args to be an array: ${args}`);
+	}
 
     const argsArr = args || [];
     const cwd = options?.cwd;
