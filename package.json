@@ -11,7 +11,9 @@
     "test": "cd cli && npm run test",
     "build:cli": "cd cli && npm run build",
     "build:frontend": "cd frontend && npm run build",
-    "build": "npm run build:frontend && npm run build:cli"
+    "build": "npm run build:frontend && npm run build:cli",
+	"check:git-clean": "git diff-index --quiet HEAD -- || (echo \"Working directory is not clean. Please commit or stash your changes.\" && exit 1)",
+	"publish:patch": "npm run check:git-clean && npm run build && npm version patch && git push && npm publish"
   },
   "keywords": [
     "ai",
