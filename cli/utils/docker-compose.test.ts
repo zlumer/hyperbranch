@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isRunningService } from "./docker-compose.ts";
+import { isRunningService } from "./docker-compose.js";
 import * as execaModule from "execa";
 
 vi.mock("execa", () => {

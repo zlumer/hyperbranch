@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { join } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import * as Docker from "./docker.ts";
+import * as Docker from "./docker.js";
 import * as execaModule from "execa";
 
 vi.mock("execa", () => ({

@@ -4,9 +4,9 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import { parseArgs } from "node:util";
 
-import { createCmd } from "../commands/create.ts";
-import { runCmd } from "../commands/run.ts";
-import { mergeCmd } from "../commands/merge.ts";
+import { createCmd } from "../commands/create.js";
+import { runCmd } from "../commands/run.js";
+import { mergeCmd } from "../commands/merge.js";
 import { execa } from "execa";
 
 vi.mock("execa");

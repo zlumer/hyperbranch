@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest"
 import { join } from "node:path"
 import { mkdir, writeFile, rm, mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { loadConfig } from "./config.ts"
+import { loadConfig } from "./config.js"
 
 describe("loadConfig", () => {
   it("defaults", async () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fsPromises from "node:fs/promises";
 import { join } from "node:path";
-import app from "../server/main.ts";
+import app from "../server/main.js";
 
 describe.sequential("Server Integration Tests", () => {
     const API_KEY = process.env.HB_API_KEY || "test-api-key";

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
 import fsPromises from "node:fs/promises";
-import * as GitClones from "../utils/git-clones.ts";
+import * as GitClones from "../utils/git-clones.js";
 import { execa } from "execa";
 
 vi.mock("execa");

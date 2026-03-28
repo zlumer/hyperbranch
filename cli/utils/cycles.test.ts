@@ -1,6 +1,6 @@
 import { expect, describe, it, beforeEach } from "vitest";
-import { detectDependencyCycle, detectParentCycle } from "./cycles.ts";
-import { TaskFile } from "../types.ts";
+import { detectDependencyCycle, detectParentCycle } from "./cycles.js";
+import { TaskFile } from "../types.js";
 
 // --- Mock Setup ---
 const mockStore = new Map<string, TaskFile>();

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { join } from "node:path"
 import { mkdtemp, rm, writeFile, stat } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import * as System from "./system.ts"
+import * as System from "./system.js"
 import * as execaModule from "execa"
 
 vi.mock("execa", () => {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import fs from "node:fs/promises";
 import os from "node:os";
 
-import { rmCmd } from "./rm.ts";
+import { rmCmd } from "./rm.js";
 
 vi.mock("execa");
 

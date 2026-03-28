@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { join } from "node:path";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
-import * as GitClones from "../utils/git-clones.ts";
-import { git } from "../utils/git.ts";
+import * as GitClones from "../utils/git-clones.js";
+import { git } from "../utils/git.js";
 
 describe.sequential("Live GitClones Integration (No Mocks)", () => {
   let tempDir: string;

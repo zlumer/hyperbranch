@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import * as Git from "./git.ts"
-import { TaskId } from "./id.ts"
+import * as Git from "./git.js"
+import { TaskId } from "./id.js"
 import * as execaModule from "execa"
 
 vi.mock("execa", () => ({
