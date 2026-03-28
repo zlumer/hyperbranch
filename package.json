@@ -1,6 +1,6 @@
 {
   "name": "hyperbranch",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
   "bin": {
@@ -12,8 +12,8 @@
     "build:cli": "cd cli && npm run build",
     "build:frontend": "cd frontend && npm run build",
     "build": "npm run build:frontend && npm run build:cli",
-	"check:git-clean": "git diff-index --quiet HEAD -- || (echo \"Working directory is not clean. Please commit or stash your changes.\" && exit 1)",
-	"publish:patch": "npm run check:git-clean && npm run build && npm version patch && git push && npm publish"
+    "check:git-clean": "git diff-index --quiet HEAD -- || (echo \"Working directory is not clean. Please commit or stash your changes.\" && exit 1)",
+    "publish:patch": "npm run check:git-clean && npm run build && npm version patch && git push && npm publish"
   },
   "keywords": [
     "ai",
