@@ -1,6 +1,6 @@
 {
   "name": "hyperbranch",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "No-overhead git-native markdown-native AI agent orchestrator",
   "main": "index.js",
   "bin": {
@@ -10,8 +10,8 @@
   "scripts": {
     "test": "cd cli && npm run test",
     "build:cli": "cd cli && npm run build",
-	"build:frontend": "cd frontend && npm run build",
-	"build": "npm run build:cli && npm run build:frontend"
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:cli && npm run build:frontend"
   },
   "keywords": [
     "ai",
@@ -22,7 +22,7 @@
   ],
   "files": [
     "/cli/dist/hb.js",
-	"/frontend/dist/"
+    "/frontend/dist/"
   ],
   "repository": {
     "type": "git",
