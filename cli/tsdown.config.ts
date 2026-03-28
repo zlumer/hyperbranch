@@ -10,7 +10,5 @@ export default defineConfig({
   clean: true,
   target: 'node20',
   platform: 'node',
-  deps: {
-    alwaysBundle: Object.keys(pkg.dependencies || {})
-  }
+  deps: {}
 });
