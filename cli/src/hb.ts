@@ -100,7 +100,7 @@ async function checkDockerInstalled() {
 	try {
 		await execa("docker", ["--version"]);
 	} catch (e) {
-		console.error("Error: Docker is not installed or not in PATH. Some commands may fail.");
+		console.error("Error: Docker is not available: not installed or not in PATH or you're running inside a container. Running tasks will fail.");
 	}
 }
 
